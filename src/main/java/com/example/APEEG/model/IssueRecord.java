@@ -1,5 +1,6 @@
 package com.example.APEEG.model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.DBRef;
@@ -13,10 +14,9 @@ import java.time.LocalDateTime;
 public class IssueRecord {
 
     public enum State {
-        PENDING_APPROVAL,
-        OPEN,
-        RETURNED,
-        CANCELLED
+        OPEN,       // Active checkout (Direct issue, no approval required)
+        RETURNED,   // Instrument checked back in
+        CANCELLED   // Transaction voided/revoked
     }
 
     @Id
@@ -27,39 +27,49 @@ public class IssueRecord {
 
     @DBRef
     @Field("borrower_scientist")
+    @JsonProperty("borrower_scientist")
     private Person borrowerScientist;
 
     @DBRef
     @Field("owner_scientist")
+    @JsonProperty("owner_scientist")
     private Person ownerScientist;
 
     @Field("staff_name")
+    @JsonProperty("staff_name")
     private String staffName;
 
     @Field("staff_email")
+    @JsonProperty("staff_email")
     private String staffEmail;
 
     @Field("issue_date")
+    @JsonProperty("issue_date")
     private LocalDate issueDate;
 
     @Field("due_date")
+    @JsonProperty("due_date")
     private LocalDate dueDate;
 
     private String purpose;
 
     @Field("condition_out")
+    @JsonProperty("condition_out")
     private String conditionOut;
 
     @Field("condition_in")
+    @JsonProperty("condition_in")
     private String conditionIn;
 
     @Field("actual_return_date")
+    @JsonProperty("actual_return_date")
     private LocalDate actualReturnDate;
 
-    private State state = State.OPEN;
+    private State state = State.OPEN; // Defaults directly to OPEN
 
     @CreatedDate
     @Field("created_at")
+    @JsonProperty("created_at")
     private LocalDateTime createdAt;
 
     public IssueRecord() {}

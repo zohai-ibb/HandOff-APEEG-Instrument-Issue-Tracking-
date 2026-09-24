@@ -1,4 +1,3 @@
-// IssueRecordRepository.java
 package com.example.APEEG.repository;
 
 import com.example.APEEG.model.IssueRecord;
@@ -11,5 +10,6 @@ import java.util.List;
 public interface IssueRecordRepository extends MongoRepository<IssueRecord, String> {
     List<IssueRecord> findByBorrowerScientistId(String borrowerId);
     List<IssueRecord> findByOwnerScientistId(String ownerId);
+    List<IssueRecord> findByInstrumentIdAndState(String instrumentId, IssueRecord.State state);
     List<IssueRecord> findByState(IssueRecord.State state);
 }

@@ -37,22 +37,31 @@ public class IssueRecordService {
         return issueRecordRepository.findByOwnerScientistId(ownerId);
     }
 
-    public IssueRecord createIssueRecord(IssueRecord record) {
+    public List<IssueRecord> getByState(IssueRecord.State state) {
+        return issueRecordRepository.findByState(state);
+    }
+
+    /**
+     * Direct Issue Logic:
+     * Checks if instrument is AVAILABLE, updates status to ISSUED, and saves IssueRecord as OPEN.
+     */
+    public IssueRecord createDirectIssue(IssueRecord record) {
         if (record.getInstrument() == null || record.getInstrument().getId() == null) {
-            throw new IllegalArgumentException("Associated instrument must be provided.");
+            throw new IllegalArgumentException("Associated instrument ID must be provided.");
         }
 
         Instrument instrument = instrumentRepository.findById(record.getInstrument().getId())
-                .orElseThrow(() -> new IllegalArgumentException("Instrument not found."));
+                .orElseThrow(() -> new IllegalArgumentException("Instrument not found with ID: " + record.getInstrument().getId()));
 
         if (instrument.getStatus() != Instrument.Status.AVAILABLE) {
-            throw new IllegalStateException("Instrument is currently unavailable for borrowing.");
+            throw new IllegalStateException("Instrument is currently " + instrument.getStatus() + " and cannot be issued.");
         }
 
-        // Update instrument status to ISSUED
+        // 1. Mutate instrument status
         instrument.setStatus(Instrument.Status.ISSUED);
         instrumentRepository.save(instrument);
 
+        // 2. Prepare and save issue record
         record.setState(IssueRecord.State.OPEN);
         if (record.getIssueDate() == null) {
             record.setIssueDate(LocalDate.now());
@@ -61,13 +70,17 @@ public class IssueRecordService {
         return issueRecordRepository.save(record);
     }
 
+    /**
+     * Return Logic:
+     * Closes the active checkout record and resets instrument status to AVAILABLE.
+     */
     public Optional<IssueRecord> returnInstrument(String issueRecordId, String conditionIn) {
         return issueRecordRepository.findById(issueRecordId).map(record -> {
             record.setConditionIn(conditionIn);
             record.setActualReturnDate(LocalDate.now());
             record.setState(IssueRecord.State.RETURNED);
 
-            // Set instrument status back to AVAILABLE
+            // Restore instrument back to AVAILABLE
             Instrument instrument = record.getInstrument();
             if (instrument != null) {
                 instrument.setStatus(Instrument.Status.AVAILABLE);
