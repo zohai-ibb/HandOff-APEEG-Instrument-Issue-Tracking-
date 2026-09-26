@@ -1,5 +1,6 @@
 package com.example.APEEG.model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.DBRef;
@@ -11,6 +12,7 @@ import java.time.LocalDateTime;
 @Document(collection = "mail_logs")
 public class MailLog {
 
+    // Trigger category for the email notification
     public enum MailType {
         ISSUE,
         APPROVAL_REQUEST,
@@ -21,35 +23,45 @@ public class MailLog {
         MANUAL_REMINDER
     }
 
+    // SMTP delivery execution status
     public enum DeliveryStatus {
         SENT,
         FAILED
     }
 
     @Id
-    private String id;
+    private String id; // Unique MongoDB Document ID
 
+    // Reference to the active checkout transaction (Nullable for calibration alerts)
     @DBRef
     @Field("issue_record")
+    @JsonProperty("issue_record")
     private IssueRecord issueRecord;
 
+    // Reference to the physical hardware instrument (Nullable)
     @DBRef
     private Instrument instrument;
 
-    private MailType type;
-    private String recipients;
-    private String subject;
-    private String body;
+    private MailType type; // Type of email dispatched
+
+    private String recipients; // Comma-separated email addresses
+
+    private String subject; // Email subject line
+
+    private String body; // Plain-text email body contents
 
     @CreatedDate
     @Field("sent_at")
-    private LocalDateTime sentAt;
+    @JsonProperty("sent_at")
+    private LocalDateTime sentAt; // Automatic timestamp upon logging
 
     @Field("delivery_status")
-    private DeliveryStatus deliveryStatus;
+    @JsonProperty("delivery_status")
+    private DeliveryStatus deliveryStatus; // SENT or FAILED
 
-    private String error;
+    private String error; // Thrown exception or SMTP error trace (null if SENT)
 
+    // Default Constructor
     public MailLog() {}
 
     // --- Getters and Setters ---

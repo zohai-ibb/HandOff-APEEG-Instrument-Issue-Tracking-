@@ -29,7 +29,9 @@ public class MaintenanceRecordService {
     public List<MaintenanceRecord> getByInstrumentId(String instrumentId) {
         return maintenanceRecordRepository.findByInstrumentId(instrumentId);
     }
-
+    /**
+     * Dispatch an instrument to off-site vendor for repair or calibration
+     */
     public MaintenanceRecord sendToMaintenance(MaintenanceRecord record) {
         Instrument instrument = instrumentRepository.findById(record.getInstrument().getId())
                 .orElseThrow(() -> new IllegalArgumentException("Instrument not found."));
@@ -44,7 +46,9 @@ public class MaintenanceRecordService {
 
         return maintenanceRecordRepository.save(record);
     }
-
+    /**
+     * Receive back instrument from vendor, attach certificate, and make item AVAILABLE
+     */
     public Optional<MaintenanceRecord> returnFromMaintenance(String id, String certificatePath) {
         return maintenanceRecordRepository.findById(id).map(record -> {
             record.setReturnedOn(LocalDate.now());
