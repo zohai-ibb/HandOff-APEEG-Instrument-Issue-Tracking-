@@ -2,6 +2,7 @@ package com.example.APEEG.service;
 
 import com.example.APEEG.model.Person;
 import com.example.APEEG.repository.PersonRepository;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -11,9 +12,11 @@ import java.util.Optional;
 public class PersonService {
 
     private final PersonRepository personRepository;
+    private final BCryptPasswordEncoder passwordEncoder;
 
     public PersonService(PersonRepository personRepository) {
         this.personRepository = personRepository;
+        this.passwordEncoder = new BCryptPasswordEncoder();
     }
 
     public List<Person> getAllPersons() {
@@ -29,9 +32,19 @@ public class PersonService {
     }
 
     public Person createPerson(Person person) {
-        if (personRepository.findByEmail(person.getEmail()).isPresent()) {
-            throw new IllegalArgumentException("Scientist with email " + person.getEmail() + " already exists.");
+        if (person.getEmail() != null && personRepository.findByEmail(person.getEmail()).isPresent()) {
+            throw new IllegalArgumentException("Scientist with email " + person.getEmail() + " is already registered.");
         }
+
+        // Encrypt password before persisting to MongoDB
+        if (person.getPassword() != null && !person.getPassword().isEmpty()) {
+            person.setPassword(passwordEncoder.encode(person.getPassword()));
+        }
+
+        if (person.getDepartment() == null || person.getDepartment().trim().isEmpty()) {
+            person.setDepartment("APEEG");
+        }
+
         return personRepository.save(person);
     }
 
@@ -41,9 +54,16 @@ public class PersonService {
             existing.setEmail(details.getEmail());
             existing.setMobile(details.getMobile());
             existing.setDepartment(details.getDepartment());
+
             if (details.getIsActive() != null) {
                 existing.setIsActive(details.getIsActive());
             }
+
+            // Hash new password if supplied during profile update
+            if (details.getPassword() != null && !details.getPassword().isEmpty()) {
+                existing.setPassword(passwordEncoder.encode(details.getPassword()));
+            }
+
             return personRepository.save(existing);
         });
     }

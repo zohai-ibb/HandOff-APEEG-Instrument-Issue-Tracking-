@@ -1,5 +1,6 @@
 package com.example.APEEG.model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
@@ -21,6 +22,8 @@ public class Person {
     @Indexed(unique = true)
     private String email;
 
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private String password;
     private String mobile;
     private String department = "APEEG";
 
