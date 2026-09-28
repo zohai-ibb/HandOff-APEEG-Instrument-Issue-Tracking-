@@ -10,7 +10,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/instruments")
-@CrossOrigin(origins = "*")
 public class InstrumentController {
 
     private final InstrumentService instrumentService;
@@ -31,12 +30,6 @@ public class InstrumentController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @GetMapping("/search")
-    public List<Instrument> getByName(@RequestParam String name) {
-        return instrumentService.getByName(name);
-    }
-
-    // Endpoint route: GET /api/instruments/scan?assetId=CBRI/APEEG/0121
     @GetMapping("/scan")
     public ResponseEntity<Instrument> getByAssetId(@RequestParam String assetId) {
         return instrumentService.getByAssetId(assetId)
@@ -65,17 +58,26 @@ public class InstrumentController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Instrument> updateInstrument(@PathVariable String id, @RequestBody Instrument details) {
-        return instrumentService.updateInstrument(id, details)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<?> updateInstrument(@PathVariable String id, @RequestBody Instrument details) {
+        try {
+            Instrument updated = instrumentService.updateInstrument(id, details);
+            return ResponseEntity.ok(updated);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        }
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteInstrument(@PathVariable String id) {
-        if (instrumentService.deleteInstrument(id)) {
+    public ResponseEntity<?> deleteInstrument(@PathVariable String id) {
+        try {
+            instrumentService.deleteInstrument(id);
             return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         }
-        return ResponseEntity.notFound().build();
     }
 }

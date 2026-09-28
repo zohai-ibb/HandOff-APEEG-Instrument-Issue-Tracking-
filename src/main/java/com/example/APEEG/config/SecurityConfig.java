@@ -10,11 +10,12 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-/**
- * Spring Security configuration establishing stateless session handling
- * and API endpoint access policies.
- */
+import java.util.List;
+
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -28,24 +29,48 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // Disable CSRF protection for stateless REST endpoints
+                // Apply global CORS configuration
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                // Disable CSRF protection for stateless REST APIs
                 .csrf(AbstractHttpConfigurer::disable)
-                // Configure stateless session management (no HTTP session created)
+                // Enforce stateless session management (no HTTP session)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // Endpoint Security Rules
+                // Request Access Rules
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll() // Unsecured / Public (Signup & Login)
-                        .anyRequest().authenticated()               // SECURED: All other endpoints require valid JWT
+                        .anyRequest().authenticated()               // SECURED: Requires valid JWT
                 )
-                // Attach JWT filter prior to Spring's standard auth filter
+                // Attach JWT filter before Spring's UsernamePasswordAuthenticationFilter
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
     /**
-     * Bean declaration for BCrypt password hashing across services.
+     * Production CORS Configuration:
+     * Restricts API access strictly to designated frontend domains.
      */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+
+        // Allowed Origins (Replace with your production domain / Vercel deployment URL)
+        configuration.setAllowedOrigins(List.of("https://apeeg-cbri.res.in", "http://localhost:3000"));
+
+        // Allowed HTTP Methods
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+
+        // Allowed Headers
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
+
+        // Allow Credentials (e.g., Bearer tokens / Cookies)
+        configuration.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+
     @Bean
     public BCryptPasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();

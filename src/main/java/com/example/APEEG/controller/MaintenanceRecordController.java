@@ -36,16 +36,24 @@ public class MaintenanceRecordController {
             return ResponseEntity.status(HttpStatus.CREATED).body(saved);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         }
     }
 
     @PutMapping("/{id}/return")
-    public ResponseEntity<MaintenanceRecord> returnFromMaintenance(
+    public ResponseEntity<?> returnFromMaintenance(
             @PathVariable String id,
             @RequestParam(required = false) String certificatePath) {
 
-        return maintenanceRecordService.returnFromMaintenance(id, certificatePath)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        try {
+            return maintenanceRecordService.returnFromMaintenance(id, certificatePath)
+                    .map(ResponseEntity::ok)
+                    .orElse(ResponseEntity.notFound().build());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        }
     }
 }

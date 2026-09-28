@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/scheduler")
-@CrossOrigin(origins = "*")
 public class MailSchedulerController {
 
     private final MailSchedulerService mailSchedulerService;

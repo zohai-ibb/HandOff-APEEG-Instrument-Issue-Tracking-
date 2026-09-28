@@ -4,13 +4,17 @@ import com.example.APEEG.model.Person;
 import com.example.APEEG.service.PersonService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * Controller exposing Person/Scientist profile endpoints.
+ * Includes strict ownership checks for profile modifications.
+ */
 @RestController
 @RequestMapping("/api/persons")
-@CrossOrigin(origins = "*")
 public class PersonController {
 
     private final PersonService personService;
@@ -41,18 +45,48 @@ public class PersonController {
         }
     }
 
+    /**
+     * PUT: Updates profile details.
+     * Enforces that scientists can ONLY edit their own profile.
+     */
     @PutMapping("/{id}")
-    public ResponseEntity<Person> updatePerson(@PathVariable String id, @RequestBody Person details) {
+    public ResponseEntity<?> updatePerson(@PathVariable String id, @RequestBody Person details) {
+        Person loggedInScientist = getAuthenticatedScientist();
+
+        if (loggedInScientist != null && !loggedInScientist.getId().equals(id)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body("Forbidden: You are not authorized to update another scientist's profile.");
+        }
+
         return personService.updatePerson(id, details)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    /**
+     * DELETE: Deletes a scientist profile.
+     * Restricted to self-deletion.
+     */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deletePerson(@PathVariable String id) {
+    public ResponseEntity<?> deletePerson(@PathVariable String id) {
+        Person loggedInScientist = getAuthenticatedScientist();
+
+        if (loggedInScientist != null && !loggedInScientist.getId().equals(id)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body("Forbidden: You cannot delete another scientist's account.");
+        }
+
         if (personService.deletePerson(id)) {
             return ResponseEntity.noContent().build();
         }
         return ResponseEntity.notFound().build();
+    }
+
+    private Person getAuthenticatedScientist() {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (principal instanceof Person) {
+            return (Person) principal;
+        }
+        return null;
     }
 }

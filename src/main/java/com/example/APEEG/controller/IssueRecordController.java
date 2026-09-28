@@ -9,9 +9,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * REST Controller exposing checkout and return APIs.
+ */
 @RestController
 @RequestMapping("/api/issue-records")
-@CrossOrigin(origins = "*")
 public class IssueRecordController {
 
     private final IssueRecordService issueRecordService;
@@ -20,13 +22,11 @@ public class IssueRecordController {
         this.issueRecordService = issueRecordService;
     }
 
-    // GET: Fetch all issue records
     @GetMapping
     public List<IssueRecord> getAllRecords() {
         return issueRecordService.getAllRecords();
     }
 
-    // GET: Fetch record by Mongo document ID
     @GetMapping("/{id}")
     public ResponseEntity<IssueRecord> getById(@PathVariable String id) {
         return issueRecordService.getById(id)
@@ -34,25 +34,16 @@ public class IssueRecordController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // GET: Fetch records where a specific scientist is the borrower
     @GetMapping("/borrower/{borrowerId}")
     public List<IssueRecord> getByBorrower(@PathVariable String borrowerId) {
         return issueRecordService.getByBorrowerScientistId(borrowerId);
     }
 
-    // GET: Fetch records where a specific scientist is the owner
     @GetMapping("/owner/{ownerId}")
     public List<IssueRecord> getByOwner(@PathVariable String ownerId) {
         return issueRecordService.getByOwnerScientistId(ownerId);
     }
 
-    // GET: Filter records by State enum (OPEN, RETURNED, CANCELLED)
-    @GetMapping("/state/{state}")
-    public List<IssueRecord> getByState(@PathVariable IssueRecord.State state) {
-        return issueRecordService.getByState(state);
-    }
-
-    // POST: Create direct issue (No approval required)
     @PostMapping
     public ResponseEntity<?> createIssueRecord(@RequestBody IssueRecord record) {
         try {
@@ -63,18 +54,25 @@ public class IssueRecordController {
         }
     }
 
-    // PUT: Process return of an instrument
     @PutMapping("/{id}/return")
-    public ResponseEntity<IssueRecord> returnInstrument(
+    public ResponseEntity<?> returnInstrument(
             @PathVariable String id,
             @RequestBody(required = false) Map<String, String> payload) {
 
-        String conditionIn = (payload != null && payload.containsKey("condition_in"))
-                ? payload.get("condition_in")
-                : "Returned intact";
+        try {
+            String conditionIn = (payload != null && payload.containsKey("condition_in"))
+                    ? payload.get("condition_in")
+                    : "Returned intact";
 
-        return issueRecordService.returnInstrument(id, conditionIn)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+            return issueRecordService.returnInstrument(id, conditionIn)
+                    .map(ResponseEntity::ok)
+                    .orElse(ResponseEntity.notFound().build());
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        } catch (SecurityException e) {
+            // Returns HTTP 403 Forbidden if an unauthorized peer tries to process the return
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        }
     }
 }
