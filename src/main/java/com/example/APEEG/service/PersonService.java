@@ -75,4 +75,17 @@ public class PersonService {
         }
         return false;
     }
+    /**
+     * Authenticates a Scientist using email and raw password against the stored BCrypt hash.
+     */
+    public Optional<Person> authenticate(String email, String rawPassword) {
+        Optional<Person> personOpt = personRepository.findByEmail(email);
+        if (personOpt.isPresent()) {
+            Person person = personOpt.get();
+            if (person.getPassword() != null && passwordEncoder.matches(rawPassword, person.getPassword())) {
+                return Optional.of(person);
+            }
+        }
+        return Optional.empty();
+    }
 }
