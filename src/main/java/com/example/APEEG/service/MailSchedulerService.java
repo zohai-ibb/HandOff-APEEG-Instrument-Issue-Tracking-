@@ -1,4 +1,3 @@
-// File: src/main/java/com/example/APEEG/service/MailSchedulerService.java
 package com.example.APEEG.service;
 
 import com.example.APEEG.model.Instrument;
@@ -16,25 +15,30 @@ import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
+/**
+ * Scheduled background engine running daily at 09:00 AM IST.
+ * Scans active loans and instruments to dispatch automated warnings and reminders.
+ */
 @Service
 public class MailSchedulerService {
 
     private final IssueRecordRepository issueRecordRepository;
     private final InstrumentRepository instrumentRepository;
     private final MailLogRepository mailLogRepository;
+    private final EmailService emailService;
 
-    // Inject repositories via constructor
     public MailSchedulerService(IssueRecordRepository issueRecordRepository,
                                 InstrumentRepository instrumentRepository,
-                                MailLogRepository mailLogRepository) {
+                                MailLogRepository mailLogRepository,
+                                EmailService emailService) {
         this.issueRecordRepository = issueRecordRepository;
         this.instrumentRepository = instrumentRepository;
         this.mailLogRepository = mailLogRepository;
+        this.emailService = emailService;
     }
 
     /**
-     * Daily Cron Job: Runs every day at 09:00 AM IST.
-     * Cron expression syntax: second minute hour day-of-month month day-of-week
+     * Daily Cron Task: Runs automatically every day at 09:00 AM IST.
      */
     @Scheduled(cron = "0 0 9 * * ?", zone = "Asia/Kolkata")
     public void runDailyReminderEngine() {
@@ -46,7 +50,7 @@ public class MailSchedulerService {
     }
 
     /**
-     * 1. Advance Warning: Sent 2 days before the return due date
+     * 1. Advance Return Warnings: Dispatched 2 days prior to expected return date.
      */
     private void processAdvanceNotices(LocalDate today) {
         List<IssueRecord> openRecords = issueRecordRepository.findByState(IssueRecord.State.OPEN);
@@ -55,18 +59,21 @@ public class MailSchedulerService {
             if (record.getDueDate() != null) {
                 long daysUntilDue = ChronoUnit.DAYS.between(today, record.getDueDate());
 
-                // Trigger if exactly 2 days remain
                 if (daysUntilDue == 2) {
                     if (!isAlreadyMailedToday(record.getId(), MailLog.MailType.ADVANCE_NOTICE, today)) {
-                        sendAndLogEmail(
+                        String recipients = buildRecipients(record, false);
+                        String subject = "[APEEG Warning] Return Due in 2 Days: " + record.getInstrument().getName();
+                        String body = "Reminder: Instrument " + record.getInstrument().getName()
+                                + " (" + record.getInstrument().getAssetId() + ") is scheduled for return on "
+                                + record.getDueDate() + ".\nHandled by Staff: " + record.getStaffName();
+
+                        emailService.sendAndLogEmail(
                                 record,
                                 record.getInstrument(),
                                 MailLog.MailType.ADVANCE_NOTICE,
-                                buildRecipients(record, false),
-                                "[APEEG Warning] Instrument Return Due in 2 Days: " + record.getInstrument().getName(),
-                                "Reminder: The instrument " + record.getInstrument().getName() + " ("
-                                        + record.getInstrument().getAssetId() + ") is due for return on "
-                                        + record.getDueDate() + "."
+                                recipients,
+                                subject,
+                                body
                         );
                     }
                 }
@@ -75,7 +82,7 @@ public class MailSchedulerService {
     }
 
     /**
-     * 2. Overdue Reminders: Sent daily for items past due date until returned
+     * 2. Daily Overdue Chasing: Dispatched every single day after due date passes until returned.
      */
     private void processOverdueReminders(LocalDate today) {
         List<IssueRecord> openRecords = issueRecordRepository.findByState(IssueRecord.State.OPEN);
@@ -85,15 +92,22 @@ public class MailSchedulerService {
                 long daysOverdue = ChronoUnit.DAYS.between(record.getDueDate(), today);
 
                 if (!isAlreadyMailedToday(record.getId(), MailLog.MailType.OVERDUE, today)) {
-                    sendAndLogEmail(
+                    String recipients = buildRecipients(record, true); // Copies Owner Scientist on overdue notices
+                    String subject = "[APEEG OVERDUE] Immediate Action Required: " + record.getInstrument().getName();
+                    String body = "OVERDUE NOTICE: The instrument " + record.getInstrument().getName()
+                            + " (" + record.getInstrument().getAssetId() + ") is " + daysOverdue
+                            + " day(s) overdue.\nExpected Return Date: " + record.getDueDate()
+                            + "\nBorrowing Scientist: " + (record.getBorrowerScientist() != null ? record.getBorrowerScientist().getName() : "N/A")
+                            + "\nIntermediary Staff: " + record.getStaffName() + " (" + record.getStaffEmail() + ")"
+                            + "\n\nPlease return the item immediately to the lab.";
+
+                    emailService.sendAndLogEmail(
                             record,
                             record.getInstrument(),
                             MailLog.MailType.OVERDUE,
-                            buildRecipients(record, true), // Include owner scientist on overdue CC
-                            "[APEEG OVERDUE] Immediate Action Required: " + record.getInstrument().getName(),
-                            "OVERDUE NOTICE: Instrument " + record.getInstrument().getName() + " ("
-                                    + record.getInstrument().getAssetId() + ") is " + daysOverdue
-                                    + " day(s) overdue. Expected return was " + record.getDueDate() + "."
+                            recipients,
+                            subject,
+                            body
                     );
                 }
             }
@@ -101,7 +115,7 @@ public class MailSchedulerService {
     }
 
     /**
-     * 3. Calibration Warnings: Sent when calibration expires in 30 days
+     * 3. Re-Calibration Warnings: Dispatched when instrument calibration expires in 30 days.
      */
     private void processCalibrationWarnings(LocalDate today) {
         List<Instrument> instruments = instrumentRepository.findAll();
@@ -111,21 +125,23 @@ public class MailSchedulerService {
                 long daysUntilCalibration = ChronoUnit.DAYS.between(today, instrument.getCalibrationValidTo());
 
                 if (daysUntilCalibration == 30) {
-                    // Check idempotency for instrument calibration alerts
                     if (!isInstrumentMailedToday(instrument.getId(), MailLog.MailType.CALIBRATION, today)) {
                         String ownerEmail = (instrument.getOwnerScientist() != null)
                                 ? instrument.getOwnerScientist().getEmail()
                                 : "";
 
-                        sendAndLogEmail(
-                                null, // No active issue record required for calibration alerts
+                        String subject = "[APEEG Calibration] 30-Day Notice: " + instrument.getName();
+                        String body = "Calibration Alert: Hardware asset " + instrument.getName()
+                                + " (" + instrument.getAssetId() + ") calibration expires on "
+                                + instrument.getCalibrationValidTo() + ". Please schedule servicing.";
+
+                        emailService.sendAndLogEmail(
+                                null, // No issue record associated with calibration alerts
                                 instrument,
                                 MailLog.MailType.CALIBRATION,
                                 ownerEmail,
-                                "[APEEG Calibration] 30-Day Re-Calibration Notice: " + instrument.getName(),
-                                "Calibration Notice: " + instrument.getName() + " (" + instrument.getAssetId()
-                                        + ") calibration validity expires on " + instrument.getCalibrationValidTo()
-                                        + ". Please arrange servicing."
+                                subject,
+                                body
                         );
                     }
                 }
@@ -134,7 +150,7 @@ public class MailSchedulerService {
     }
 
     /**
-     * Helper: Idempotency Check for Issue Record emails
+     * Idempotency Check: Verifies if an email of the given type was already logged today for an issue record.
      */
     private boolean isAlreadyMailedToday(String issueRecordId, MailLog.MailType type, LocalDate today) {
         LocalDateTime startOfDay = today.atStartOfDay();
@@ -148,7 +164,7 @@ public class MailSchedulerService {
     }
 
     /**
-     * Helper: Idempotency Check for Instrument Calibration emails
+     * Idempotency Check: Verifies if a calibration warning was already logged today for an instrument.
      */
     private boolean isInstrumentMailedToday(String instrumentId, MailLog.MailType type, LocalDate today) {
         LocalDateTime startOfDay = today.atStartOfDay();
@@ -162,56 +178,28 @@ public class MailSchedulerService {
     }
 
     /**
-     * Helper: Construct comma-separated recipients string
+     * Helper: Constructs a comma-separated list of target recipient emails.
      */
     private String buildRecipients(IssueRecord record, boolean includeOwner) {
         StringBuilder recipients = new StringBuilder();
 
+        // 1. Borrower Scientist Email
         if (record.getBorrowerScientist() != null && record.getBorrowerScientist().getEmail() != null) {
             recipients.append(record.getBorrowerScientist().getEmail());
         }
 
-        if (record.getStaffEmail() != null && !record.getStaffEmail().isEmpty()) {
+        // 2. Intermediary Staff Email
+        if (record.getStaffEmail() != null && !record.getStaffEmail().trim().isEmpty()) {
             if (recipients.length() > 0) recipients.append(", ");
             recipients.append(record.getStaffEmail());
         }
 
+        // 3. Owner Scientist Email (included on Overdue notifications)
         if (includeOwner && record.getOwnerScientist() != null && record.getOwnerScientist().getEmail() != null) {
             if (recipients.length() > 0) recipients.append(", ");
             recipients.append(record.getOwnerScientist().getEmail());
         }
 
         return recipients.toString();
-    }
-
-    /**
-     * Dispatch SMTP message and write immutable audit trail row to mail_logs
-     */
-    private void sendAndLogEmail(IssueRecord issueRecord, Instrument instrument, MailLog.MailType type,
-                                 String recipients, String subject, String body) {
-        MailLog mailLog = new MailLog();
-        mailLog.setIssueRecord(issueRecord);
-        mailLog.setInstrument(instrument);
-        mailLog.setType(type);
-        mailLog.setRecipients(recipients);
-        mailLog.setSubject(subject);
-        mailLog.setBody(body);
-        mailLog.setSentAt(LocalDateTime.now());
-
-        try {
-            // Placeholder for JavaMailSender dispatch:
-            // mimeMessageHelper.setTo(recipients.split(","));
-            // javaMailSender.send(mimeMessage);
-
-            mailLog.setDeliveryStatus(MailLog.DeliveryStatus.SENT);
-            mailLog.setError(null);
-        } catch (Exception e) {
-            // On mail server error, log failure without breaking backend application
-            mailLog.setDeliveryStatus(MailLog.DeliveryStatus.FAILED);
-            mailLog.setError(e.getMessage());
-        }
-
-        // Always save attempt to mail_logs collection for auditing
-        mailLogRepository.save(mailLog);
     }
 }
