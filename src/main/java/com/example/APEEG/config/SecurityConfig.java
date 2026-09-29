@@ -29,41 +29,24 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // Apply global CORS configuration
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                // Disable CSRF protection for stateless REST APIs
                 .csrf(AbstractHttpConfigurer::disable)
-                // Enforce stateless session management (no HTTP session)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // Request Access Rules
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll() // Unsecured / Public (Signup & Login)
-                        .anyRequest().authenticated()               // SECURED: Requires valid JWT
+                        .requestMatchers("/api/auth/**").permitAll() // Public login & signup
+                        .anyRequest().authenticated()               // Locked down behind JWT
                 )
-                // Attach JWT filter before Spring's UsernamePasswordAuthenticationFilter
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    /**
-     * Production CORS Configuration:
-     * Restricts API access strictly to designated frontend domains.
-     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-
-        // Allowed Origins (Replace with your production domain / Vercel deployment URL)
-        configuration.setAllowedOrigins(List.of("https://apeeg-cbri.res.in", "http://localhost:3000"));
-
-        // Allowed HTTP Methods
+        configuration.setAllowedOrigins(List.of("http://localhost:3000", "https://apeeg-cbri.res.in"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-
-        // Allowed Headers
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
-
-        // Allow Credentials (e.g., Bearer tokens / Cookies)
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
