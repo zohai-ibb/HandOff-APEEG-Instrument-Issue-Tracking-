@@ -9,11 +9,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-/**
- * REST Controller exposing checkout and return APIs.
- */
 @RestController
 @RequestMapping("/api/issue-records")
+@CrossOrigin(origins = "*")
 public class IssueRecordController {
 
     private final IssueRecordService issueRecordService;
@@ -22,26 +20,51 @@ public class IssueRecordController {
         this.issueRecordService = issueRecordService;
     }
 
+    /**
+     * GET /api/issue-records
+     * Returns ONLY records related to the calling scientist (as Borrower or Owner).
+     */
     @GetMapping
-    public List<IssueRecord> getAllRecords() {
-        return issueRecordService.getAllRecords();
+    public ResponseEntity<?> getAllRecordsForCallingScientist() {
+        try {
+            List<IssueRecord> records = issueRecordService.getMyIssueRecords();
+            return ResponseEntity.ok(records);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
+        }
     }
 
+    /**
+     * GET /api/issue-records/{id}
+     * Returns the record ONLY if the caller is the borrower or owner.
+     */
     @GetMapping("/{id}")
-    public ResponseEntity<IssueRecord> getById(@PathVariable String id) {
-        return issueRecordService.getById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<?> getById(@PathVariable String id) {
+        try {
+            return issueRecordService.getByIdSecured(id)
+                    .map(ResponseEntity::ok)
+                    .orElse(ResponseEntity.notFound().build());
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        }
     }
 
     @GetMapping("/borrower/{borrowerId}")
-    public List<IssueRecord> getByBorrower(@PathVariable String borrowerId) {
-        return issueRecordService.getByBorrowerScientistId(borrowerId);
+    public ResponseEntity<?> getByBorrower(@PathVariable String borrowerId) {
+        try {
+            return ResponseEntity.ok(issueRecordService.getByBorrowerScientistId(borrowerId));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        }
     }
 
     @GetMapping("/owner/{ownerId}")
-    public List<IssueRecord> getByOwner(@PathVariable String ownerId) {
-        return issueRecordService.getByOwnerScientistId(ownerId);
+    public ResponseEntity<?> getByOwner(@PathVariable String ownerId) {
+        try {
+            return ResponseEntity.ok(issueRecordService.getByOwnerScientistId(ownerId));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        }
     }
 
     @PostMapping
@@ -71,7 +94,6 @@ public class IssueRecordController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
         } catch (SecurityException e) {
-            // Returns HTTP 403 Forbidden if an unauthorized peer tries to process the return
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         }
     }

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class IssueRecordService {
@@ -27,24 +28,71 @@ public class IssueRecordService {
         this.mailSchedulerService = mailSchedulerService;
     }
 
-    public List<IssueRecord> getAllRecords() {
-        return issueRecordRepository.findAll();
+    /**
+     * SECURED: Retrieves ONLY the issue records associated with the currently authenticated scientist.
+     * Filter Rule: Visible if scientist is either the Borrower Scientist OR the Owner Scientist.
+     */
+    public List<IssueRecord> getMyIssueRecords() {
+        Person loggedInScientist = getAuthenticatedScientist();
+        if (loggedInScientist == null) {
+            throw new SecurityException("Unauthorized: No authenticated scientist session found.");
+        }
+
+        String loggedInId = loggedInScientist.getId();
+        List<IssueRecord> allRecords = issueRecordRepository.findAll();
+
+        return allRecords.stream().filter(record -> {
+            boolean isBorrower = record.getBorrowerScientist() != null
+                    && loggedInId.equals(record.getBorrowerScientist().getId());
+
+            boolean isOwner = record.getOwnerScientist() != null
+                    && loggedInId.equals(record.getOwnerScientist().getId());
+
+            return isBorrower || isOwner;
+        }).collect(Collectors.toList());
     }
 
-    public Optional<IssueRecord> getById(String id) {
-        return issueRecordRepository.findById(id);
+    /**
+     * SECURED: Retrieves a single IssueRecord by ID.
+     * Blocks access if the requesting scientist is neither the borrower nor the owner.
+     */
+    public Optional<IssueRecord> getByIdSecured(String id) {
+        Optional<IssueRecord> recordOpt = issueRecordRepository.findById(id);
+
+        if (recordOpt.isPresent()) {
+            IssueRecord record = recordOpt.get();
+            Person loggedInScientist = getAuthenticatedScientist();
+
+            if (loggedInScientist != null) {
+                boolean isBorrower = record.getBorrowerScientist() != null
+                        && loggedInScientist.getId().equals(record.getBorrowerScientist().getId());
+
+                boolean isOwner = record.getOwnerScientist() != null
+                        && loggedInScientist.getId().equals(record.getOwnerScientist().getId());
+
+                if (!isBorrower && !isOwner) {
+                    throw new SecurityException("Forbidden: You are not authorized to view this issue record.");
+                }
+            }
+        }
+
+        return recordOpt;
     }
 
     public List<IssueRecord> getByBorrowerScientistId(String borrowerId) {
+        Person loggedInScientist = getAuthenticatedScientist();
+        if (loggedInScientist != null && !loggedInScientist.getId().equals(borrowerId)) {
+            throw new SecurityException("Forbidden: You cannot view borrowing records of another scientist.");
+        }
         return issueRecordRepository.findByBorrowerScientistId(borrowerId);
     }
 
     public List<IssueRecord> getByOwnerScientistId(String ownerId) {
+        Person loggedInScientist = getAuthenticatedScientist();
+        if (loggedInScientist != null && !loggedInScientist.getId().equals(ownerId)) {
+            throw new SecurityException("Forbidden: You cannot view loan records of instruments owned by another scientist.");
+        }
         return issueRecordRepository.findByOwnerScientistId(ownerId);
-    }
-
-    public List<IssueRecord> getByState(IssueRecord.State state) {
-        return issueRecordRepository.findByState(state);
     }
 
     public IssueRecord createDirectIssue(IssueRecord record) {
