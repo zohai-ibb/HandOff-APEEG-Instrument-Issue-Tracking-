@@ -16,8 +16,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
- * Scheduled background engine running daily at 09:00 AM IST.
- * Scans active loans and instruments to dispatch automated warnings and reminders.
+ * Centralized Mail Management Service.
+ * - Handles daily automated background jobs running at 09:00 AM IST.
+ * - Provides transactional mail execution methods for real-time instrument issuing and returning.
  */
 @Service
 public class MailSchedulerService {
@@ -50,7 +51,70 @@ public class MailSchedulerService {
     }
 
     /**
-     * 1. Advance Return Warnings: Dispatched 2 days prior to expected return date.
+     * Instant Issue Confirmation Mail Service:
+     * Called directly when an instrument is issued. Dispatches an email to ALL THREE stakeholders:
+     * 1. Borrower Scientist
+     * 2. Intermediary Staff
+     * 3. Owner Scientist
+     */
+    public void sendIssueConfirmation(IssueRecord record) {
+        if (record == null || record.getInstrument() == null) {
+            return;
+        }
+
+        String recipients = buildRecipients(record, true); // Include Borrower, Staff, and Owner
+        String subject = "[APEEG] Instrument Issued: " + record.getInstrument().getName() + " (" + record.getInstrument().getAssetId() + ")";
+        String body = "The instrument " + record.getInstrument().getName() + " (" + record.getInstrument().getAssetId() + ") has been successfully issued."
+                + "\n\nBorrower Scientist: " + (record.getBorrowerScientist() != null ? record.getBorrowerScientist().getName() : "N/A")
+                + "\nOwning Scientist: " + (record.getOwnerScientist() != null ? record.getOwnerScientist().getName() : "N/A")
+                + "\nIntermediary Staff: " + record.getStaffName() + " (" + record.getStaffEmail() + ")"
+                + "\nIssue Date: " + record.getIssueDate()
+                + "\nReturn Due Date: " + record.getDueDate()
+                + "\nPurpose: " + (record.getPurpose() != null ? record.getPurpose() : "N/A")
+                + "\nCondition at Checkout: " + (record.getConditionOut() != null ? record.getConditionOut() : "N/A");
+
+        emailService.sendAndLogEmail(
+                record,
+                record.getInstrument(),
+                MailLog.MailType.ISSUE,
+                recipients,
+                subject,
+                body
+        );
+    }
+
+    /**
+     * Instant Return Confirmation Mail Service:
+     * Called directly when an instrument is returned. Dispatches closure confirmation email to ALL THREE stakeholders:
+     * 1. Borrower Scientist
+     * 2. Intermediary Staff
+     * 3. Owner Scientist
+     */
+    public void sendReturnConfirmation(IssueRecord record) {
+        if (record == null) {
+            return;
+        }
+
+        Instrument instrument = record.getInstrument();
+        String recipients = buildRecipients(record, true); // Include Borrower, Staff, and Owner
+        String subject = "[APEEG] Instrument Returned: " + (instrument != null ? instrument.getName() : "Equipment");
+        String body = "The instrument loan transaction has been closed."
+                + "\n\nReturned On: " + record.getActualReturnDate()
+                + "\nCondition At Return: " + record.getConditionIn()
+                + "\nHandled By Staff: " + record.getStaffName();
+
+        emailService.sendAndLogEmail(
+                record,
+                instrument,
+                MailLog.MailType.RETURN,
+                recipients,
+                subject,
+                body
+        );
+    }
+
+    /**
+     * Advance Return Warnings: Dispatched 2 days prior to expected return date.
      */
     private void processAdvanceNotices(LocalDate today) {
         List<IssueRecord> openRecords = issueRecordRepository.findByState(IssueRecord.State.OPEN);
@@ -82,7 +146,7 @@ public class MailSchedulerService {
     }
 
     /**
-     * 2. Daily Overdue Chasing: Dispatched every single day after due date passes until returned.
+     * Daily Overdue Chasing: Dispatched every single day after due date passes until returned.
      */
     private void processOverdueReminders(LocalDate today) {
         List<IssueRecord> openRecords = issueRecordRepository.findByState(IssueRecord.State.OPEN);
@@ -115,7 +179,7 @@ public class MailSchedulerService {
     }
 
     /**
-     * 3. Re-Calibration Warnings: Dispatched when instrument calibration expires in 30 days.
+     * Re-Calibration Warnings: Dispatched when instrument calibration expires in 30 days.
      */
     private void processCalibrationWarnings(LocalDate today) {
         List<Instrument> instruments = instrumentRepository.findAll();
@@ -178,7 +242,10 @@ public class MailSchedulerService {
     }
 
     /**
-     * Helper: Constructs a comma-separated list of target recipient emails.
+     * Helper: Constructs a comma-separated list of target recipient emails:
+     * 1. Borrower Scientist Email
+     * 2. Intermediary Staff Email
+     * 3. Owner Scientist Email (if includeOwner is true)
      */
     private String buildRecipients(IssueRecord record, boolean includeOwner) {
         StringBuilder recipients = new StringBuilder();
@@ -194,7 +261,7 @@ public class MailSchedulerService {
             recipients.append(record.getStaffEmail());
         }
 
-        // 3. Owner Scientist Email (included on Overdue notifications)
+        // 3. Owner Scientist Email
         if (includeOwner && record.getOwnerScientist() != null && record.getOwnerScientist().getEmail() != null) {
             if (recipients.length() > 0) recipients.append(", ");
             recipients.append(record.getOwnerScientist().getEmail());
