@@ -9,7 +9,9 @@ import com.example.APEEG.repository.PersonRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDate;
 
 /**
@@ -23,29 +25,22 @@ public class OwnerIssueService {
     private final InstrumentRepository instrumentRepository;
     private final PersonRepository personRepository;
     private final MailSchedulerService mailSchedulerService;
+    private final FileStorageService fileStorageService;
 
     public OwnerIssueService(IssueRecordRepository issueRecordRepository,
                              InstrumentRepository instrumentRepository,
                              PersonRepository personRepository,
-                             MailSchedulerService mailSchedulerService) {
+                             MailSchedulerService mailSchedulerService,
+                             FileStorageService fileStorageService) {
         this.issueRecordRepository = issueRecordRepository;
         this.instrumentRepository = instrumentRepository;
         this.personRepository = personRepository;
         this.mailSchedulerService = mailSchedulerService;
+        this.fileStorageService = fileStorageService;
     }
 
     /**
-     * Issues an instrument directly to another registered scientist in the system.
-     * Initiated strictly by the logged-in Owner Scientist.
-     *
-     * @param instrumentId         Target instrument ID to be issued
-     * @param borrowerScientistId  Selected registered borrower scientist ID
-     * @param staffName            Intermediary staff member name
-     * @param staffEmail           Intermediary staff member email
-     * @param dueDate              Target return due date
-     * @param purpose              Purpose of the loan/borrowing
-     * @param conditionOut         Equipment physical condition at issuing time
-     * @return Saved IssueRecord document in MongoDB
+     * Core issue logic for internal registered scientist checkouts.
      */
     @Transactional
     public IssueRecord issueToInternalScientist(String instrumentId,
@@ -54,7 +49,8 @@ public class OwnerIssueService {
                                                 String staffEmail,
                                                 LocalDate dueDate,
                                                 String purpose,
-                                                String conditionOut) {
+                                                String conditionOut,
+                                                MultipartFile photo) {
 
         // 1. Authenticate Logged-In Owner Scientist from JWT Context
         Person authenticatedOwner = getAuthenticatedScientist();
@@ -94,26 +90,37 @@ public class OwnerIssueService {
             throw new IllegalArgumentException("You cannot issue an instrument to yourself.");
         }
 
-        // 7. Update Instrument Status to ISSUED
+        // 7. Save photo if uploaded
+        String photoPath = null;
+        if (photo != null && !photo.isEmpty()) {
+            try {
+                photoPath = fileStorageService.saveFile(photo);
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to store condition photo: " + e.getMessage());
+            }
+        }
+
+        // 8. Update Instrument Status to ISSUED
         instrument.setStatus(Instrument.Status.ISSUED);
         instrumentRepository.save(instrument);
 
-        // 8. Construct and Persist the IssueRecord Document
+        // 9. Construct and Persist the IssueRecord Document
         IssueRecord record = new IssueRecord();
         record.setInstrument(instrument);
         record.setOwnerScientist(authenticatedOwner);
-        record.setBorrowerScientist(borrowerScientist); // Hydrated DB entity (contains full name & email)
+        record.setBorrowerScientist(borrowerScientist); // Hydrated DB entity
         record.setStaffName(staffName);
         record.setStaffEmail(staffEmail);
         record.setIssueDate(LocalDate.now());
         record.setDueDate(dueDate != null ? dueDate : LocalDate.now().plusDays(14));
         record.setPurpose(purpose);
         record.setConditionOut(conditionOut);
+        record.setConditionPhotoPath(photoPath); // Set saved image URL path
         record.setState(IssueRecord.State.OPEN);
 
         IssueRecord savedRecord = issueRecordRepository.save(record);
 
-        // 9. Dispatch Automated Email Notification
+        // 10. Dispatch Automated Email Notification
         try {
             mailSchedulerService.sendIssueConfirmation(savedRecord);
         } catch (Exception e) {

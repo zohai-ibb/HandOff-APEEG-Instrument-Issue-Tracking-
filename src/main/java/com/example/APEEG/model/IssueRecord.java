@@ -74,6 +74,19 @@ public class IssueRecord {
     @JsonProperty("created_at")
     private LocalDateTime createdAt;
 
+
+    @Field("condition_photo_path")
+    @JsonProperty("condition_photo_path")
+    private String conditionPhotoPath;
+
+    public String getConditionPhotoPath() {
+        return conditionPhotoPath;
+    }
+
+    public void setConditionPhotoPath(String conditionPhotoPath) {
+        this.conditionPhotoPath = conditionPhotoPath;
+    }
+
 //    public IssueRecord() {}
 //
 //    // --- Getters and Setters ---
