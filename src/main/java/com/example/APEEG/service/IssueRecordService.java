@@ -143,11 +143,13 @@ public class IssueRecordService {
     }
 
     /**
-     * Processes an instrument return, handles optional photo upload, updates state to RETURNED,
-     * restores instrument status to AVAILABLE, and triggers email confirmation.
+     * Processes an instrument return.
+     * Enforces conditionIn as "GOOD" or "BAD".
+     * Updates Instrument.status to AVAILABLE if GOOD, or MAINTENANCE if BAD.
      */
     @Transactional
     public Optional<IssueRecord> returnInstrument(String issueRecordId, String conditionIn, MultipartFile photo) {
+        // 1. Fetch IssueRecord
         IssueRecord record = issueRecordRepository.findById(issueRecordId)
                 .orElseThrow(() -> new IllegalArgumentException("Issue record not found with ID: " + issueRecordId));
 
@@ -155,6 +157,7 @@ public class IssueRecordService {
             throw new IllegalStateException("This instrument loan is already marked as RETURNED.");
         }
 
+        // 2. Security / Stakeholder Check
         Person authenticatedUser = getAuthenticatedScientist();
         if (authenticatedUser == null) {
             throw new SecurityException("Unauthorized: Valid scientist authentication required.");
@@ -170,7 +173,13 @@ public class IssueRecordService {
             throw new SecurityException("Forbidden: Only the borrowing scientist or owner scientist can process this return.");
         }
 
-        // 1. Process and save Return Photo if uploaded
+        // 3. Validate & Resolve Binary Condition State ("GOOD" vs "BAD")
+        String resolvedCondition = "GOOD"; // Default baseline
+        if (conditionIn != null && conditionIn.trim().equalsIgnoreCase("BAD")) {
+            resolvedCondition = "BAD";
+        }
+
+        // 4. Save Return Photo if provided
         if (photo != null && !photo.isEmpty()) {
             try {
                 String photoPath = fileStorageService.saveFile(photo);
@@ -180,21 +189,27 @@ public class IssueRecordService {
             }
         }
 
-        // 2. Update record completion attributes
-        record.setConditionIn(conditionIn != null && !conditionIn.trim().isEmpty() ? conditionIn : "Returned intact");
+        // 5. Update Issue Record closure fields
+        record.setConditionIn(resolvedCondition);
         record.setActualReturnDate(LocalDate.now());
         record.setState(IssueRecord.State.RETURNED);
 
-        // 3. Restore instrument availability status
+        // 6. Update Instrument Status based on condition state
         Instrument instrument = record.getInstrument();
         if (instrument != null) {
-            instrument.setStatus(Instrument.Status.AVAILABLE);
+            if ("BAD".equals(resolvedCondition)) {
+                // Damaged/faulty instrument goes directly under MAINTENANCE
+                instrument.setStatus(Instrument.Status.MAINTENANCE);
+            } else {
+                // Good condition instrument restores to AVAILABLE
+                instrument.setStatus(Instrument.Status.AVAILABLE);
+            }
             instrumentRepository.save(instrument);
         }
 
         IssueRecord updatedRecord = issueRecordRepository.save(record);
 
-        // 4. Dispatch email confirmation
+        // 7. Dispatch Return Email Notification
         try {
             mailSchedulerService.sendReturnConfirmation(updatedRecord);
         } catch (Exception e) {

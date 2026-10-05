@@ -71,8 +71,8 @@ public class IssueRecordController {
     }
 
     /**
-     * 1. JSON Return Endpoint (Without photo upload)
-     * Header: Content-Type: application/json
+     * 1. JSON Return Endpoint
+     * Body JSON: { "condition_in": "GOOD" } or { "condition_in": "BAD" }
      */
     @PutMapping(value = "/{id}/return", consumes = {"application/json"})
     public ResponseEntity<?> processReturnJson(
@@ -82,7 +82,7 @@ public class IssueRecordController {
         try {
             String conditionIn = (payload != null && payload.containsKey("condition_in"))
                     ? payload.get("condition_in")
-                    : "Returned intact";
+                    : "GOOD";
 
             return issueRecordService.returnInstrument(id, conditionIn, null)
                     .map(ResponseEntity::ok)
@@ -99,21 +99,18 @@ public class IssueRecordController {
     }
 
     /**
-     * 2. Multipart Form-Data Return Endpoint (With return condition photo upload)
-     * Header: Content-Type: multipart/form-data
+     * 2. Multipart Form-Data Return Endpoint (With Condition Photo Upload)
+     * Form Field: condition_in = "GOOD" or "BAD"
+     * Form File: photo = image binary
      */
     @PutMapping(value = "/{id}/return/photo", consumes = {"multipart/form-data"})
     public ResponseEntity<?> processReturnWithPhoto(
             @PathVariable String id,
-            @RequestParam(value = "condition_in", required = false) String conditionIn,
+            @RequestParam(value = "condition_in", required = false, defaultValue = "GOOD") String conditionIn,
             @RequestPart(value = "photo", required = false) MultipartFile photo) {
 
         try {
-            String resolvedCondition = (conditionIn != null && !conditionIn.trim().isEmpty())
-                    ? conditionIn
-                    : "Returned intact";
-
-            return issueRecordService.returnInstrument(id, resolvedCondition, photo)
+            return issueRecordService.returnInstrument(id, conditionIn, photo)
                     .map(ResponseEntity::ok)
                     .orElse(ResponseEntity.notFound().build());
 
