@@ -3,15 +3,14 @@ package com.example.APEEG.dto;
 import java.time.LocalDate;
 
 /**
- * Data Transfer Object encapsulating raw HTTP payload fields sent when
- * an Instrument Owner issues an item to another internal registered Scientist.
+ * DTO capturing raw JSON payload parameters for owner-initiated instrument issuing.
  */
 public class OwnerIssueRequestDTO {
 
     private String instrumentId;
-    private String borrowerScientistId;
+    private String scientistListId; // ID from private scientist_list collection
 
-    // Intermediary Staff Member Details
+    // Intermediary Staff Details
     private String staffName;
     private String staffEmail;
 
@@ -30,12 +29,12 @@ public class OwnerIssueRequestDTO {
         this.instrumentId = instrumentId;
     }
 
-    public String getBorrowerScientistId() {
-        return borrowerScientistId;
+    public String getScientistListId() {
+        return scientistListId;
     }
 
-    public void setBorrowerScientistId(String borrowerScientistId) {
-        this.borrowerScientistId = borrowerScientistId;
+    public void setScientistListId(String scientistListId) {
+        this.scientistListId = scientistListId;
     }
 
     public String getStaffName() {

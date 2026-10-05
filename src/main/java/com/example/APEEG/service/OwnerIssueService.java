@@ -3,9 +3,10 @@ package com.example.APEEG.service;
 import com.example.APEEG.model.Instrument;
 import com.example.APEEG.model.IssueRecord;
 import com.example.APEEG.model.Person;
+import com.example.APEEG.model.ScientistList;
 import com.example.APEEG.repository.InstrumentRepository;
 import com.example.APEEG.repository.IssueRecordRepository;
-import com.example.APEEG.repository.PersonRepository;
+import com.example.APEEG.repository.ScientistListRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,35 +17,35 @@ import java.time.LocalDate;
 
 /**
  * Service dedicated to managing instrument issuing workflows initiated
- * directly by the Instrument Owner for another registered Scientist in the application.
+ * directly by the Instrument Owner for a scientist contact in their private ScientistList.
  */
 @Service
 public class OwnerIssueService {
 
     private final IssueRecordRepository issueRecordRepository;
     private final InstrumentRepository instrumentRepository;
-    private final PersonRepository personRepository;
+    private final ScientistListRepository scientistListRepository;
     private final MailSchedulerService mailSchedulerService;
     private final FileStorageService fileStorageService;
 
     public OwnerIssueService(IssueRecordRepository issueRecordRepository,
                              InstrumentRepository instrumentRepository,
-                             PersonRepository personRepository,
+                             ScientistListRepository scientistListRepository,
                              MailSchedulerService mailSchedulerService,
                              FileStorageService fileStorageService) {
         this.issueRecordRepository = issueRecordRepository;
         this.instrumentRepository = instrumentRepository;
-        this.personRepository = personRepository;
+        this.scientistListRepository = scientistListRepository;
         this.mailSchedulerService = mailSchedulerService;
         this.fileStorageService = fileStorageService;
     }
 
     /**
-     * Core issue logic for internal registered scientist checkouts.
+     * Issues a single instrument to a scientist contact saved in the owner's private ScientistList.
      */
     @Transactional
-    public IssueRecord issueToInternalScientist(String instrumentId,
-                                                String borrowerScientistId,
+    public IssueRecord issueToScientistFromList(String instrumentId,
+                                                String scientistListId,
                                                 String staffName,
                                                 String staffEmail,
                                                 LocalDate dueDate,
@@ -58,7 +59,7 @@ public class OwnerIssueService {
             throw new SecurityException("Unauthorized: Valid scientist authentication required.");
         }
 
-        // 2. Validate & Fetch Target Instrument from Database
+        // 2. Validate & Fetch Target Instrument
         if (instrumentId == null || instrumentId.trim().isEmpty()) {
             throw new IllegalArgumentException("Instrument ID is required.");
         }
@@ -66,7 +67,7 @@ public class OwnerIssueService {
         Instrument instrument = instrumentRepository.findById(instrumentId)
                 .orElseThrow(() -> new IllegalArgumentException("Instrument not found with ID: " + instrumentId));
 
-        // 3. Ownership Guard: Ensure caller actually owns this instrument
+        // 3. Ownership Guard: Ensure caller owns this instrument
         if (instrument.getOwnerScientist() == null ||
                 !instrument.getOwnerScientist().getId().equals(authenticatedOwner.getId())) {
             throw new SecurityException("Forbidden: You can only issue instruments that belong to your inventory.");
@@ -77,20 +78,21 @@ public class OwnerIssueService {
             throw new IllegalStateException("Instrument is currently " + instrument.getStatus() + " and cannot be issued.");
         }
 
-        // 5. Validate & Fetch Borrower Scientist from Registered Users ('persons' collection)
-        if (borrowerScientistId == null || borrowerScientistId.trim().isEmpty()) {
-            throw new IllegalArgumentException("Borrower Scientist ID is required.");
+        // 5. Fetch & Validate Borrower Contact from ScientistList
+        if (scientistListId == null || scientistListId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Scientist contact ID is required.");
         }
 
-        Person borrowerScientist = personRepository.findById(borrowerScientistId)
-                .orElseThrow(() -> new IllegalArgumentException("Borrower scientist not found with ID: " + borrowerScientistId));
+        ScientistList targetScientist = scientistListRepository.findById(scientistListId)
+                .orElseThrow(() -> new IllegalArgumentException("Scientist contact not found with ID: " + scientistListId));
 
-        // 6. Prevent Self-Issuing
-        if (borrowerScientist.getId().equals(authenticatedOwner.getId())) {
-            throw new IllegalArgumentException("You cannot issue an instrument to yourself.");
+        // Access Control: Ensure target contact belongs to the authenticated user's private list
+        if (targetScientist.getOwnerUser() == null ||
+                !targetScientist.getOwnerUser().getId().equals(authenticatedOwner.getId())) {
+            throw new SecurityException("Forbidden: Access denied to this scientist contact.");
         }
 
-        // 7. Save photo if uploaded
+        // 6. Save condition photo if uploaded
         String photoPath = null;
         if (photo != null && !photo.isEmpty()) {
             try {
@@ -100,27 +102,34 @@ public class OwnerIssueService {
             }
         }
 
-        // 8. Update Instrument Status to ISSUED
+        // 7. Mutate Instrument Status to ISSUED
         instrument.setStatus(Instrument.Status.ISSUED);
         instrumentRepository.save(instrument);
 
-        // 9. Construct and Persist the IssueRecord Document
+        // 8. Snapshot borrower details into a Person reference
+        Person borrowerSnapshot = new Person();
+        borrowerSnapshot.setName(targetScientist.getName());
+        borrowerSnapshot.setEmail(targetScientist.getEmail());
+        borrowerSnapshot.setMobile(targetScientist.getMobile());
+        borrowerSnapshot.setDepartment(targetScientist.getDepartment());
+
+        // 9. Construct and Persist IssueRecord
         IssueRecord record = new IssueRecord();
         record.setInstrument(instrument);
         record.setOwnerScientist(authenticatedOwner);
-        record.setBorrowerScientist(borrowerScientist); // Hydrated DB entity
+        record.setBorrowerScientist(borrowerSnapshot);
         record.setStaffName(staffName);
         record.setStaffEmail(staffEmail);
         record.setIssueDate(LocalDate.now());
         record.setDueDate(dueDate != null ? dueDate : LocalDate.now().plusDays(14));
         record.setPurpose(purpose);
         record.setConditionOut(conditionOut);
-        record.setConditionPhotoPath(photoPath); // Set saved image URL path
+        record.setConditionPhotoPath(photoPath);
         record.setState(IssueRecord.State.OPEN);
 
         IssueRecord savedRecord = issueRecordRepository.save(record);
 
-        // 10. Dispatch Automated Email Notification
+        // 10. Dispatch Email Notification to Owner, Borrower Scientist, and Intermediary Staff
         try {
             mailSchedulerService.sendIssueConfirmation(savedRecord);
         } catch (Exception e) {
@@ -131,7 +140,7 @@ public class OwnerIssueService {
     }
 
     /**
-     * Helper to retrieve currently authenticated Person principal from JWT SecurityContext
+     * Helper to retrieve currently authenticated Person principal from SecurityContext
      */
     private Person getAuthenticatedScientist() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();

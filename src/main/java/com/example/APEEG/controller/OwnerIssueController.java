@@ -1,6 +1,6 @@
 package com.example.APEEG.controller;
 
-import com.example.APEEG.dto.OwnerIssueRequestDTO; // Or your request payload DTO
+import com.example.APEEG.dto.OwnerIssueRequestDTO;
 import com.example.APEEG.model.IssueRecord;
 import com.example.APEEG.service.OwnerIssueService;
 import org.springframework.http.HttpStatus;
@@ -22,16 +22,16 @@ public class OwnerIssueController {
     }
 
     /**
-     * 1. Standard JSON Endpoint (Postman / Web UI without file upload)
+     * 1. Plain JSON Endpoint (Without Photo Upload)
      * Endpoint: POST /api/issue-records/owner-issue
      * Header: Content-Type: application/json
      */
     @PostMapping(consumes = {"application/json"})
     public ResponseEntity<?> issueToScientistJson(@RequestBody OwnerIssueRequestDTO dto) {
         try {
-            IssueRecord createdRecord = ownerIssueService.issueToInternalScientist(
+            IssueRecord createdRecord = ownerIssueService.issueToScientistFromList(
                     dto.getInstrumentId(),
-                    dto.getBorrowerScientistId(),
+                    dto.getScientistListId(), // Target scientist contact ID from ScientistList
                     dto.getStaffName(),
                     dto.getStaffEmail(),
                     dto.getDueDate(),
@@ -52,14 +52,14 @@ public class OwnerIssueController {
     }
 
     /**
-     * 2. Multipart Form-Data Endpoint (When capturing/uploading a physical picture)
+     * 2. Multipart Form-Data Endpoint (With Photo Upload)
      * Endpoint: POST /api/issue-records/owner-issue/photo
      * Header: Content-Type: multipart/form-data
      */
     @PostMapping(value = "/photo", consumes = {"multipart/form-data"})
     public ResponseEntity<?> issueToScientistWithPhoto(
             @RequestParam("instrumentId") String instrumentId,
-            @RequestParam("borrowerScientistId") String borrowerScientistId,
+            @RequestParam("scientistListId") String scientistListId,
             @RequestParam(value = "staffName", required = false) String staffName,
             @RequestParam(value = "staffEmail", required = false) String staffEmail,
             @RequestParam(value = "dueDate", required = false) String dueDate,
@@ -72,9 +72,9 @@ public class OwnerIssueController {
                     ? LocalDate.parse(dueDate)
                     : LocalDate.now().plusDays(14);
 
-            IssueRecord createdRecord = ownerIssueService.issueToInternalScientist(
+            IssueRecord createdRecord = ownerIssueService.issueToScientistFromList(
                     instrumentId,
-                    borrowerScientistId,
+                    scientistListId,
                     staffName,
                     staffEmail,
                     parsedDueDate,
