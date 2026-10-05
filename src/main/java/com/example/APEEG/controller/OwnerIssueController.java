@@ -20,7 +20,7 @@ public class OwnerIssueController {
     public OwnerIssueController(OwnerIssueService ownerIssueService) {
         this.ownerIssueService = ownerIssueService;
     }
-
+//
     /**
      * 1. Plain JSON Endpoint (Without Photo Upload)
      * Endpoint: POST /api/issue-records/owner-issue
