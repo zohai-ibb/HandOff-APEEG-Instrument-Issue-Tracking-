@@ -5,6 +5,7 @@ import com.example.APEEG.service.IssueRecordService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -20,10 +21,6 @@ public class IssueRecordController {
         this.issueRecordService = issueRecordService;
     }
 
-    /**
-     * GET /api/issue-records
-     * Returns ONLY records related to the calling scientist (as Borrower or Owner).
-     */
     @GetMapping
     public ResponseEntity<?> getAllRecordsForCallingScientist() {
         try {
@@ -34,10 +31,6 @@ public class IssueRecordController {
         }
     }
 
-    /**
-     * GET /api/issue-records/{id}
-     * Returns the record ONLY if the caller is the borrower or owner.
-     */
     @GetMapping("/{id}")
     public ResponseEntity<?> getById(@PathVariable String id) {
         try {
@@ -76,29 +69,13 @@ public class IssueRecordController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
-//
-//    @PutMapping("/{id}/return")
-//    public ResponseEntity<?> returnInstrument(
-//            @PathVariable String id,
-//            @RequestBody(required = false) Map<String, String> payload) {
-//
-//        try {
-//            String conditionIn = (payload != null && payload.containsKey("condition_in"))
-//                    ? payload.get("condition_in")
-//                    : "Returned intact";
-//
-//            return issueRecordService.returnInstrument(id, conditionIn)
-//                    .map(ResponseEntity::ok)
-//                    .orElse(ResponseEntity.notFound().build());
-//
-//        } catch (IllegalArgumentException e) {
-//            return ResponseEntity.notFound().build();
-//        } catch (SecurityException e) {
-//            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-//        }
-//    }
-    @PutMapping("/{id}/return")
-    public ResponseEntity<?> processReturn(
+
+    /**
+     * 1. JSON Return Endpoint (Without photo upload)
+     * Header: Content-Type: application/json
+     */
+    @PutMapping(value = "/{id}/return", consumes = {"application/json"})
+    public ResponseEntity<?> processReturnJson(
             @PathVariable String id,
             @RequestBody(required = false) Map<String, String> payload) {
 
@@ -107,7 +84,36 @@ public class IssueRecordController {
                     ? payload.get("condition_in")
                     : "Returned intact";
 
-            return issueRecordService.returnInstrument(id, conditionIn)
+            return issueRecordService.returnInstrument(id, conditionIn, null)
+                    .map(ResponseEntity::ok)
+                    .orElse(ResponseEntity.notFound().build());
+
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to process return: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 2. Multipart Form-Data Return Endpoint (With return condition photo upload)
+     * Header: Content-Type: multipart/form-data
+     */
+    @PutMapping(value = "/{id}/return/photo", consumes = {"multipart/form-data"})
+    public ResponseEntity<?> processReturnWithPhoto(
+            @PathVariable String id,
+            @RequestParam(value = "condition_in", required = false) String conditionIn,
+            @RequestPart(value = "photo", required = false) MultipartFile photo) {
+
+        try {
+            String resolvedCondition = (conditionIn != null && !conditionIn.trim().isEmpty())
+                    ? conditionIn
+                    : "Returned intact";
+
+            return issueRecordService.returnInstrument(id, resolvedCondition, photo)
                     .map(ResponseEntity::ok)
                     .orElse(ResponseEntity.notFound().build());
 
