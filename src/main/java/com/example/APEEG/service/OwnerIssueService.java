@@ -15,10 +15,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDate;
 
-/**
- * Service dedicated to managing instrument issuing workflows initiated
- * directly by the Instrument Owner for a scientist contact in their private ScientistList.
- */
 @Service
 public class OwnerIssueService {
 
@@ -41,7 +37,7 @@ public class OwnerIssueService {
     }
 
     /**
-     * Issues a single instrument to a scientist contact saved in the owner's private ScientistList.
+     * Issues an instrument to a scientist contact saved in ScientistList.
      */
     @Transactional
     public IssueRecord issueToScientistFromList(String instrumentId,
@@ -53,7 +49,7 @@ public class OwnerIssueService {
                                                 String conditionOut,
                                                 MultipartFile photo) {
 
-        // 1. Authenticate Logged-In Owner Scientist from JWT Context
+        // 1. Authenticate Logged-In Instrument Owner
         Person authenticatedOwner = getAuthenticatedScientist();
         if (authenticatedOwner == null) {
             throw new SecurityException("Unauthorized: Valid scientist authentication required.");
@@ -67,18 +63,18 @@ public class OwnerIssueService {
         Instrument instrument = instrumentRepository.findById(instrumentId)
                 .orElseThrow(() -> new IllegalArgumentException("Instrument not found with ID: " + instrumentId));
 
-        // 3. Ownership Guard: Ensure caller owns this instrument
+        // 3. Verify Instrument Ownership
         if (instrument.getOwnerScientist() == null ||
                 !instrument.getOwnerScientist().getId().equals(authenticatedOwner.getId())) {
-            throw new SecurityException("Forbidden: You can only issue instruments that belong to your inventory.");
+            throw new SecurityException("Forbidden: You can only issue instruments from your own inventory.");
         }
 
-        // 4. Availability Guard: Confirm instrument status is AVAILABLE
+        // 4. Verify Instrument Availability
         if (instrument.getStatus() != Instrument.Status.AVAILABLE) {
             throw new IllegalStateException("Instrument is currently " + instrument.getStatus() + " and cannot be issued.");
         }
 
-        // 5. Fetch & Validate Borrower Contact from ScientistList
+        // 5. Fetch Target Scientist Contact
         if (scientistListId == null || scientistListId.trim().isEmpty()) {
             throw new IllegalArgumentException("Scientist contact ID is required.");
         }
@@ -86,7 +82,6 @@ public class OwnerIssueService {
         ScientistList targetScientist = scientistListRepository.findById(scientistListId)
                 .orElseThrow(() -> new IllegalArgumentException("Scientist contact not found with ID: " + scientistListId));
 
-        // Access Control: Ensure target contact belongs to the authenticated user's private list
         if (targetScientist.getOwnerUser() == null ||
                 !targetScientist.getOwnerUser().getId().equals(authenticatedOwner.getId())) {
             throw new SecurityException("Forbidden: Access denied to this scientist contact.");
@@ -102,16 +97,18 @@ public class OwnerIssueService {
             }
         }
 
-        // 7. Mutate Instrument Status to ISSUED
+        // 7. Update Instrument Status to ISSUED
         instrument.setStatus(Instrument.Status.ISSUED);
         instrumentRepository.save(instrument);
 
-        // 8. Snapshot borrower details into a Person reference
+        // 8. Build Person Snapshot WITH Scientist Contact ID
         Person borrowerSnapshot = new Person();
+        borrowerSnapshot.setId(targetScientist.getId()); // Sets the ID on the embedded object
         borrowerSnapshot.setName(targetScientist.getName());
         borrowerSnapshot.setEmail(targetScientist.getEmail());
         borrowerSnapshot.setMobile(targetScientist.getMobile());
         borrowerSnapshot.setDepartment(targetScientist.getDepartment());
+        borrowerSnapshot.setIsActive(true);
 
         // 9. Construct and Persist IssueRecord
         IssueRecord record = new IssueRecord();
@@ -129,19 +126,16 @@ public class OwnerIssueService {
 
         IssueRecord savedRecord = issueRecordRepository.save(record);
 
-        // 10. Dispatch Email Notification to Owner, Borrower Scientist, and Intermediary Staff
+        // 10. Trigger transactional emails
         try {
             mailSchedulerService.sendIssueConfirmation(savedRecord);
         } catch (Exception e) {
-            System.err.println("Failed to dispatch issue confirmation email: " + e.getMessage());
+            System.err.println("Failed to dispatch confirmation email: " + e.getMessage());
         }
 
         return savedRecord;
     }
 
-    /**
-     * Helper to retrieve currently authenticated Person principal from SecurityContext
-     */
     private Person getAuthenticatedScientist() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         if (principal instanceof Person) {

@@ -20,24 +20,22 @@ public class OwnerIssueController {
     public OwnerIssueController(OwnerIssueService ownerIssueService) {
         this.ownerIssueService = ownerIssueService;
     }
-//
+
     /**
-     * 1. Plain JSON Endpoint (Without Photo Upload)
-     * Endpoint: POST /api/issue-records/owner-issue
-     * Header: Content-Type: application/json
+     * Standard JSON Endpoint (Without photo upload)
      */
     @PostMapping(consumes = {"application/json"})
     public ResponseEntity<?> issueToScientistJson(@RequestBody OwnerIssueRequestDTO dto) {
         try {
             IssueRecord createdRecord = ownerIssueService.issueToScientistFromList(
                     dto.getInstrumentId(),
-                    dto.getScientistListId(), // Target scientist contact ID from ScientistList
+                    dto.getScientistListId(),
                     dto.getStaffName(),
                     dto.getStaffEmail(),
                     dto.getDueDate(),
                     dto.getPurpose(),
                     dto.getConditionOut(),
-                    null // No photo attached for plain JSON request
+                    null
             );
             return ResponseEntity.status(HttpStatus.CREATED).body(createdRecord);
 
@@ -52,9 +50,7 @@ public class OwnerIssueController {
     }
 
     /**
-     * 2. Multipart Form-Data Endpoint (With Photo Upload)
-     * Endpoint: POST /api/issue-records/owner-issue/photo
-     * Header: Content-Type: multipart/form-data
+     * Multipart Form-Data Endpoint (With physical photo upload)
      */
     @PostMapping(value = "/photo", consumes = {"multipart/form-data"})
     public ResponseEntity<?> issueToScientistWithPhoto(

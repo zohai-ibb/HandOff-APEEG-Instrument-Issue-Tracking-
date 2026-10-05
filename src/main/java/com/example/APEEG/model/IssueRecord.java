@@ -16,9 +16,9 @@ import java.time.LocalDateTime;
 public class IssueRecord {
 
     public enum State {
-        OPEN,       // Active checkout (Direct issue, no approval required)
-        RETURNED,   // Instrument checked back in
-        CANCELLED   // Transaction voided/revoked
+        OPEN,
+        RETURNED,
+        CANCELLED
     }
 
     @Id
@@ -28,14 +28,14 @@ public class IssueRecord {
     private Instrument instrument;
 
     @DBRef
-    @Field("borrower_scientist")
-    @JsonProperty("borrower_scientist")
-    private Person borrowerScientist;
-
-    @DBRef
     @Field("owner_scientist")
     @JsonProperty("owner_scientist")
     private Person ownerScientist;
+
+    // EMBEDDED SNAPSHOT: No @DBRef here so external contacts don't need a DB ID in 'persons'
+    @Field("borrower_scientist")
+    @JsonProperty("borrower_scientist")
+    private Person borrowerScientist;
 
     @Field("staff_name")
     @JsonProperty("staff_name")
@@ -47,11 +47,15 @@ public class IssueRecord {
 
     @Field("issue_date")
     @JsonProperty("issue_date")
-    private LocalDate issueDate;
+    private LocalDate issueDate = LocalDate.now();
 
     @Field("due_date")
     @JsonProperty("due_date")
     private LocalDate dueDate;
+
+    @Field("actual_return_date")
+    @JsonProperty("actual_return_date")
+    private LocalDate actualReturnDate;
 
     private String purpose;
 
@@ -63,72 +67,16 @@ public class IssueRecord {
     @JsonProperty("condition_in")
     private String conditionIn;
 
-    @Field("actual_return_date")
-    @JsonProperty("actual_return_date")
-    private LocalDate actualReturnDate;
-
-    private State state = State.OPEN; // Defaults directly to OPEN
-
-    @CreatedDate
-    @Field("created_at")
-    @JsonProperty("created_at")
-    private LocalDateTime createdAt;
-
-
     @Field("condition_photo_path")
     @JsonProperty("condition_photo_path")
     private String conditionPhotoPath;
 
-    public String getConditionPhotoPath() {
-        return conditionPhotoPath;
-    }
+    private State state = State.OPEN;
 
-    public void setConditionPhotoPath(String conditionPhotoPath) {
-        this.conditionPhotoPath = conditionPhotoPath;
-    }
+    @CreatedDate
+    @Field("created_at")
+    @JsonProperty("created_at")
+    private LocalDateTime createdAt = LocalDateTime.now();
 
-//    public IssueRecord() {}
-//
-//    // --- Getters and Setters ---
-//    public String getId() { return id; }
-//    public void setId(String id) { this.id = id; }
-//
-//    public Instrument getInstrument() { return instrument; }
-//    public void setInstrument(Instrument instrument) { this.instrument = instrument; }
-//
-//    public Person getBorrowerScientist() { return borrowerScientist; }
-//    public void setBorrowerScientist(Person borrowerScientist) { this.borrowerScientist = borrowerScientist; }
-//
-//    public Person getOwnerScientist() { return ownerScientist; }
-//    public void setOwnerScientist(Person ownerScientist) { this.ownerScientist = ownerScientist; }
-//
-//    public String getStaffName() { return staffName; }
-//    public void setStaffName(String staffName) { this.staffName = staffName; }
-//
-//    public String getStaffEmail() { return staffEmail; }
-//    public void setStaffEmail(String staffEmail) { this.staffEmail = staffEmail; }
-//
-//    public LocalDate getIssueDate() { return issueDate; }
-//    public void setIssueDate(LocalDate issueDate) { this.issueDate = issueDate; }
-//
-//    public LocalDate getDueDate() { return dueDate; }
-//    public void setDueDate(LocalDate dueDate) { this.dueDate = dueDate; }
-//
-//    public String getPurpose() { return purpose; }
-//    public void setPurpose(String purpose) { this.purpose = purpose; }
-//
-//    public String getConditionOut() { return conditionOut; }
-//    public void setConditionOut(String conditionOut) { this.conditionOut = conditionOut; }
-//
-//    public String getConditionIn() { return conditionIn; }
-//    public void setConditionIn(String conditionIn) { this.conditionIn = conditionIn; }
-//
-//    public LocalDate getActualReturnDate() { return actualReturnDate; }
-//    public void setActualReturnDate(LocalDate actualReturnDate) { this.actualReturnDate = actualReturnDate; }
-//
-//    public State getState() { return state; }
-//    public void setState(State state) { this.state = state; }
-//
-//    public LocalDateTime getCreatedAt() { return createdAt; }
-//    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public IssueRecord() {}
 }

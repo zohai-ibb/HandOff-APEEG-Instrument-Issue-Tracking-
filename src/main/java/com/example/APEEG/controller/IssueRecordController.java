@@ -76,9 +76,29 @@ public class IssueRecordController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
-
+//
+//    @PutMapping("/{id}/return")
+//    public ResponseEntity<?> returnInstrument(
+//            @PathVariable String id,
+//            @RequestBody(required = false) Map<String, String> payload) {
+//
+//        try {
+//            String conditionIn = (payload != null && payload.containsKey("condition_in"))
+//                    ? payload.get("condition_in")
+//                    : "Returned intact";
+//
+//            return issueRecordService.returnInstrument(id, conditionIn)
+//                    .map(ResponseEntity::ok)
+//                    .orElse(ResponseEntity.notFound().build());
+//
+//        } catch (IllegalArgumentException e) {
+//            return ResponseEntity.notFound().build();
+//        } catch (SecurityException e) {
+//            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+//        }
+//    }
     @PutMapping("/{id}/return")
-    public ResponseEntity<?> returnInstrument(
+    public ResponseEntity<?> processReturn(
             @PathVariable String id,
             @RequestBody(required = false) Map<String, String> payload) {
 
@@ -91,10 +111,13 @@ public class IssueRecordController {
                     .map(ResponseEntity::ok)
                     .orElse(ResponseEntity.notFound().build());
 
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.notFound().build();
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
         } catch (SecurityException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to process return: " + e.getMessage());
         }
     }
 }

@@ -7,6 +7,7 @@ import com.example.APEEG.repository.InstrumentRepository;
 import com.example.APEEG.repository.IssueRecordRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -152,30 +153,44 @@ public class IssueRecordService {
         return savedRecord;
     }
 
+    /**
+     * Processes an instrument return, updates record state to RETURNED,
+     * restores instrument status to AVAILABLE, and triggers email confirmation.
+     */
+    @Transactional
     public Optional<IssueRecord> returnInstrument(String issueRecordId, String conditionIn) {
+        // 1. Fetch IssueRecord by MongoDB Document ID
         IssueRecord record = issueRecordRepository.findById(issueRecordId)
                 .orElseThrow(() -> new IllegalArgumentException("Issue record not found with ID: " + issueRecordId));
 
-        Person loggedInScientist = getAuthenticatedScientist();
-
-        if (loggedInScientist == null) {
-            throw new SecurityException("Unauthorized: No authenticated scientist session found.");
+        // 2. Prevent returning an already closed loan
+        if (record.getState() == IssueRecord.State.RETURNED) {
+            throw new IllegalStateException("This instrument loan is already marked as RETURNED.");
         }
+
+        // 3. Authenticate Caller
+        Person authenticatedUser = getAuthenticatedScientist();
+        if (authenticatedUser == null) {
+            throw new SecurityException("Unauthorized: Valid scientist authentication required.");
+        }
+
+        // 4. Authorization Check: Ensure caller is either the Owner or Borrower
+        boolean isOwner = record.getOwnerScientist() != null
+                && record.getOwnerScientist().getId().equals(authenticatedUser.getId());
 
         boolean isBorrower = record.getBorrowerScientist() != null
-                && loggedInScientist.getId().equals(record.getBorrowerScientist().getId());
+                && authenticatedUser.getId().equals(record.getBorrowerScientist().getId());
 
-        boolean isOwner = record.getOwnerScientist() != null
-                && loggedInScientist.getId().equals(record.getOwnerScientist().getId());
-
-        if (!isBorrower && !isOwner) {
-            throw new SecurityException("Forbidden: Only the borrowing scientist or the owner scientist can process this return.");
+        if (!isOwner && !isBorrower) {
+            throw new SecurityException("Forbidden: Only the borrowing scientist or owner scientist can process this return.");
         }
 
+        // 5. Update Issue Record closure attributes
         record.setConditionIn(conditionIn != null && !conditionIn.trim().isEmpty() ? conditionIn : "Returned intact");
         record.setActualReturnDate(LocalDate.now());
         record.setState(IssueRecord.State.RETURNED);
 
+        // 6. Restore associated Instrument status back to AVAILABLE
         Instrument instrument = record.getInstrument();
         if (instrument != null) {
             instrument.setStatus(Instrument.Status.AVAILABLE);
@@ -184,11 +199,16 @@ public class IssueRecordService {
 
         IssueRecord updatedRecord = issueRecordRepository.save(record);
 
-        // Trigger return confirmation email via MailSchedulerService
-        mailSchedulerService.sendReturnConfirmation(updatedRecord);
+        // 7. Dispatch Return Email Notification
+        try {
+            mailSchedulerService.sendReturnConfirmation(updatedRecord);
+        } catch (Exception e) {
+            System.err.println("Failed to send return confirmation email: " + e.getMessage());
+        }
 
         return Optional.of(updatedRecord);
     }
+
 
     private Person getAuthenticatedScientist() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
