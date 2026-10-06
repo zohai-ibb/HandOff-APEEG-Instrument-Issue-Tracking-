@@ -14,13 +14,16 @@ import java.util.Optional;
 public class PersonService {
 
     private final PersonRepository personRepository;
-    private final FileStorageService fileStorageService;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final FileStorageService fileStorageService;
 
-    public PersonService(PersonRepository personRepository, FileStorageService fileStorageService) {
+    // Constructor injecting PersonRepository, BCryptPasswordEncoder, and FileStorageService
+    public PersonService(PersonRepository personRepository,
+                         BCryptPasswordEncoder passwordEncoder,
+                         FileStorageService fileStorageService) {
         this.personRepository = personRepository;
+        this.passwordEncoder = passwordEncoder;
         this.fileStorageService = fileStorageService;
-        this.passwordEncoder = new BCryptPasswordEncoder();
     }
 
     public List<Person> getAllPersons() {
@@ -35,18 +38,44 @@ public class PersonService {
         return personRepository.findByEmail(email);
     }
 
+    /**
+     * Registers / Creates a new Scientist (Person)
+     * Hashes the raw password before saving to MongoDB.
+     */
     public Person createPerson(Person person) {
-        if (personRepository.findByEmail(person.getEmail()).isPresent()) {
-            throw new IllegalArgumentException("Scientist with email " + person.getEmail() + " already exists.");
+        if (person.getEmail() != null && personRepository.findByEmail(person.getEmail()).isPresent()) {
+            throw new IllegalArgumentException("Scientist with email " + person.getEmail() + " is already registered.");
         }
+
+        // Encrypt plain text password using BCrypt
         if (person.getPassword() != null && !person.getPassword().isEmpty()) {
             person.setPassword(passwordEncoder.encode(person.getPassword()));
         }
+
+        if (person.getDepartment() == null || person.getDepartment().trim().isEmpty()) {
+            person.setDepartment("APEEG");
+        }
+
         return personRepository.save(person);
     }
 
     /**
-     * Upload and update profile photo for a Person
+     * Authenticates a Scientist using email and raw password against the stored BCrypt hash.
+     */
+    public Optional<Person> authenticate(String email, String rawPassword) {
+        Optional<Person> personOpt = personRepository.findByEmail(email);
+        if (personOpt.isPresent()) {
+            Person person = personOpt.get();
+            if (person.getPassword() != null && passwordEncoder.matches(rawPassword, person.getPassword())) {
+                return Optional.of(person);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Upload and update profile photo for a Person entity.
+     * Delegates file storage to FileStorageService and updates photoPath in MongoDB.
      */
     public Person updateProfilePhoto(String id, MultipartFile file) throws IOException {
         Person person = personRepository.findById(id)
@@ -60,18 +89,29 @@ public class PersonService {
         return personRepository.save(person);
     }
 
+    /**
+     * Updates profile details for an existing Person.
+     */
     public Optional<Person> updatePerson(String id, Person details) {
         return personRepository.findById(id).map(existing -> {
             existing.setName(details.getName());
             existing.setEmail(details.getEmail());
             existing.setMobile(details.getMobile());
             existing.setDepartment(details.getDepartment());
+
             if (details.getPhotoPath() != null) {
                 existing.setPhotoPath(details.getPhotoPath());
             }
+
             if (details.getIsActive() != null) {
                 existing.setIsActive(details.getIsActive());
             }
+
+            // Encrypt new password if provided during profile update
+            if (details.getPassword() != null && !details.getPassword().isEmpty()) {
+                existing.setPassword(passwordEncoder.encode(details.getPassword()));
+            }
+
             return personRepository.save(existing);
         });
     }
