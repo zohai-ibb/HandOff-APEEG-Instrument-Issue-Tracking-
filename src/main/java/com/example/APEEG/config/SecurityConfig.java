@@ -29,14 +29,18 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                // 1. Explicitly enable Spring Security CORS handling
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                // 2. Disable CSRF for stateless REST APIs
                 .csrf(AbstractHttpConfigurer::disable)
+                // 3. Configure stateless session management
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // 4. Configure Endpoint Access Rules
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()                // Public authentication endpoints
-                        .requestMatchers("/api/issue-records/owner-issue").authenticated() // Secured endpoint for owner issuing
-                        .anyRequest().authenticated()                              // All business endpoints require valid JWT
+                        .requestMatchers("/api/auth/**", "/api/persons/login").permitAll() // Public auth routes
+                        .anyRequest().authenticated()                                     // Protected domain routes
                 )
+                // 5. Attach JWT Filter
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -45,7 +49,14 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000", "https://apeeg-cbri.res.in"));
+
+        // Include Vite (5173), Create React App (3000), and Production domain
+        configuration.setAllowedOrigins(List.of(
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "https://apeeg-cbri.res.in"
+        ));
+
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
         configuration.setAllowCredentials(true);
