@@ -27,7 +27,7 @@ public class Person {
     private String mobile;
     private String department = "APEEG";
 
-    // New profile photo field
+    // New profile photo path field
     @Field("photo_path")
     @JsonProperty("photo_path")
     private String photoPath;

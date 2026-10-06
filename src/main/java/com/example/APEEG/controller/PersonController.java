@@ -46,15 +46,31 @@ public class PersonController {
         }
     }
 
+    /**
+     * POST: Upload or update profile photo for a Person.
+     * Endpoint: POST /api/persons/{id}/photo
+     * Header: Content-Type: multipart/form-data
+     */
     @PostMapping(value = "/{id}/photo", consumes = {"multipart/form-data"})
     public ResponseEntity<?> uploadProfilePhoto(
             @PathVariable String id,
             @RequestPart("photo") MultipartFile photo) {
         try {
-            Person updated = personService.updateProfilePhoto(id, photo);
-            return ResponseEntity.ok(updated);
+            Person loggedInScientist = getAuthenticatedScientist();
+
+            // Ownership check: Scientist can only upload photo to their own profile
+            if (loggedInScientist != null && !loggedInScientist.getId().equals(id)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body("Forbidden: You are not authorized to update another scientist's profile photo.");
+            }
+
+            Person updatedPerson = personService.updateProfilePhoto(id, photo);
+            return ResponseEntity.ok(updatedPerson);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Failed to upload profile photo: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to upload profile photo: " + e.getMessage());
         }
     }
 
