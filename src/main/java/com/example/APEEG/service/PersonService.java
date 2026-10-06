@@ -4,7 +4,9 @@ import com.example.APEEG.model.Person;
 import com.example.APEEG.repository.PersonRepository;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
@@ -12,10 +14,12 @@ import java.util.Optional;
 public class PersonService {
 
     private final PersonRepository personRepository;
+    private final FileStorageService fileStorageService;
     private final BCryptPasswordEncoder passwordEncoder;
 
-    public PersonService(PersonRepository personRepository) {
+    public PersonService(PersonRepository personRepository, FileStorageService fileStorageService) {
         this.personRepository = personRepository;
+        this.fileStorageService = fileStorageService;
         this.passwordEncoder = new BCryptPasswordEncoder();
     }
 
@@ -32,17 +36,25 @@ public class PersonService {
     }
 
     public Person createPerson(Person person) {
-        if (person.getEmail() != null && personRepository.findByEmail(person.getEmail()).isPresent()) {
-            throw new IllegalArgumentException("Scientist with email " + person.getEmail() + " is already registered.");
+        if (personRepository.findByEmail(person.getEmail()).isPresent()) {
+            throw new IllegalArgumentException("Scientist with email " + person.getEmail() + " already exists.");
         }
-
-        // Encrypt password before persisting to MongoDB
         if (person.getPassword() != null && !person.getPassword().isEmpty()) {
             person.setPassword(passwordEncoder.encode(person.getPassword()));
         }
+        return personRepository.save(person);
+    }
 
-        if (person.getDepartment() == null || person.getDepartment().trim().isEmpty()) {
-            person.setDepartment("APEEG");
+    /**
+     * Upload and update profile photo for a Person
+     */
+    public Person updateProfilePhoto(String id, MultipartFile file) throws IOException {
+        Person person = personRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Person not found with id: " + id));
+
+        if (file != null && !file.isEmpty()) {
+            String path = fileStorageService.saveFile(file);
+            person.setPhotoPath(path);
         }
 
         return personRepository.save(person);
@@ -54,16 +66,12 @@ public class PersonService {
             existing.setEmail(details.getEmail());
             existing.setMobile(details.getMobile());
             existing.setDepartment(details.getDepartment());
-
+            if (details.getPhotoPath() != null) {
+                existing.setPhotoPath(details.getPhotoPath());
+            }
             if (details.getIsActive() != null) {
                 existing.setIsActive(details.getIsActive());
             }
-
-            // Hash new password if supplied during profile update
-            if (details.getPassword() != null && !details.getPassword().isEmpty()) {
-                existing.setPassword(passwordEncoder.encode(details.getPassword()));
-            }
-
             return personRepository.save(existing);
         });
     }
@@ -74,18 +82,5 @@ public class PersonService {
             return true;
         }
         return false;
-    }
-    /**
-     * Authenticates a Scientist using email and raw password against the stored BCrypt hash.
-     */
-    public Optional<Person> authenticate(String email, String rawPassword) {
-        Optional<Person> personOpt = personRepository.findByEmail(email);
-        if (personOpt.isPresent()) {
-            Person person = personOpt.get();
-            if (person.getPassword() != null && passwordEncoder.matches(rawPassword, person.getPassword())) {
-                return Optional.of(person);
-            }
-        }
-        return Optional.empty();
     }
 }

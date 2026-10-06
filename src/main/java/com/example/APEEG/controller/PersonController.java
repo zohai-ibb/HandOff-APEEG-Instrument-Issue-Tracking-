@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -42,6 +43,18 @@ public class PersonController {
             return ResponseEntity.status(HttpStatus.CREATED).body(saved);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    @PostMapping(value = "/{id}/photo", consumes = {"multipart/form-data"})
+    public ResponseEntity<?> uploadProfilePhoto(
+            @PathVariable String id,
+            @RequestPart("photo") MultipartFile photo) {
+        try {
+            Person updated = personService.updateProfilePhoto(id, photo);
+            return ResponseEntity.ok(updated);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Failed to upload profile photo: " + e.getMessage());
         }
     }
 
