@@ -99,9 +99,8 @@ public class IssueRecordController {
     }
 
     /**
-     * 2. Multipart Form-Data Return Endpoint (With Condition Photo Upload)
-     * Form Field: condition_in = "GOOD" or "BAD"
-     * Form File: photo = image binary
+     * Multipart Form-Data Return Endpoint (With return condition photo upload)
+     * Header: Content-Type: multipart/form-data
      */
     @PutMapping(value = "/{id}/return/photo", consumes = {"multipart/form-data"})
     public ResponseEntity<?> processReturnWithPhoto(
