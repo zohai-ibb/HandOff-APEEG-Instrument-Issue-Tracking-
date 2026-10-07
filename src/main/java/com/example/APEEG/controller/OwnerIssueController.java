@@ -21,9 +21,6 @@ public class OwnerIssueController {
         this.ownerIssueService = ownerIssueService;
     }
 
-    /**
-     * Standard JSON Endpoint (Without photo upload)
-     */
     @PostMapping(consumes = {"application/json"})
     public ResponseEntity<?> issueToScientistJson(@RequestBody OwnerIssueRequestDTO dto) {
         try {
@@ -49,9 +46,6 @@ public class OwnerIssueController {
         }
     }
 
-    /**
-     * Multipart Form-Data Endpoint (With physical photo upload)
-     */
     @PostMapping(value = "/photo", consumes = {"multipart/form-data"})
     public ResponseEntity<?> issueToScientistWithPhoto(
             @RequestParam("instrumentId") String instrumentId,

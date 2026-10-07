@@ -74,7 +74,7 @@ public class OwnerIssueService {
             throw new IllegalStateException("Instrument is currently " + instrument.getStatus() + " and cannot be issued.");
         }
 
-        // 5. Fetch Target Scientist Contact
+        // 5. Fetch Target Scientist Contact from ScientistList
         if (scientistListId == null || scientistListId.trim().isEmpty()) {
             throw new IllegalArgumentException("Scientist contact ID is required.");
         }
@@ -103,7 +103,7 @@ public class OwnerIssueService {
 
         // 8. Build Person Snapshot WITH Scientist Contact ID
         Person borrowerSnapshot = new Person();
-        borrowerSnapshot.setId(targetScientist.getId()); // Sets the ID on the embedded object
+        borrowerSnapshot.setId(targetScientist.getId());
         borrowerSnapshot.setName(targetScientist.getName());
         borrowerSnapshot.setEmail(targetScientist.getEmail());
         borrowerSnapshot.setMobile(targetScientist.getMobile());
@@ -114,7 +114,7 @@ public class OwnerIssueService {
         IssueRecord record = new IssueRecord();
         record.setInstrument(instrument);
         record.setOwnerScientist(authenticatedOwner);
-        record.setBorrowerScientist(borrowerSnapshot);
+        record.setBorrowerScientist(borrowerSnapshot); // Embedded directly without @DBRef
         record.setStaffName(staffName);
         record.setStaffEmail(staffEmail);
         record.setIssueDate(LocalDate.now());

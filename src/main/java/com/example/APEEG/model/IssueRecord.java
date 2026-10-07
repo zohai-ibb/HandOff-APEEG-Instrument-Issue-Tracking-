@@ -19,9 +19,13 @@ public class IssueRecord {
     private Instrument instrument;
 
     @DBRef
+    @Field("owner_scientist")
+    @JsonProperty("owner_scientist")
     private Person ownerScientist;
 
-    @DBRef
+    // REMOVE @DBRef HERE so MongoDB embeds the Person snapshot directly
+    @Field("borrower_scientist")
+    @JsonProperty("borrower_scientist")
     private Person borrowerScientist;
 
     @Field("staff_name")
