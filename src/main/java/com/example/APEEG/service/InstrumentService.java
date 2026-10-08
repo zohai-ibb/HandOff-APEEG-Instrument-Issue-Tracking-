@@ -3,19 +3,26 @@ package com.example.APEEG.service;
 import com.example.APEEG.model.Instrument;
 import com.example.APEEG.model.Person;
 import com.example.APEEG.repository.InstrumentRepository;
+import com.example.APEEG.service.FileStorageService;
+
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
-
 @Service
 public class InstrumentService {
 
     private final InstrumentRepository instrumentRepository;
+    private final FileStorageService fileStorageService; // Declared dependency
 
-    public InstrumentService(InstrumentRepository instrumentRepository) {
+    public InstrumentService(InstrumentRepository instrumentRepository,
+                             FileStorageService fileStorageService) {
         this.instrumentRepository = instrumentRepository;
+        this.fileStorageService = fileStorageService;
     }
 
     public List<Instrument> getAllInstruments() {
@@ -112,6 +119,41 @@ public class InstrumentService {
         }
 
         instrumentRepository.deleteById(id);
+    }
+
+    // Inside InstrumentService.java
+
+    public Instrument createInstrumentWithPhoto(
+            String assetId,
+            String name,
+            String make,
+            String serialNo,
+            String location,
+            LocalDate calibrationValidTo,
+            String status,
+            Integer quantity,
+            MultipartFile photo) throws IOException {
+
+        Person authenticatedOwner = getAuthenticatedScientist(); // Resolves caller from JWT Context
+
+        Instrument instrument = new Instrument();
+        instrument.setAssetId(assetId);
+        instrument.setName(name);
+        instrument.setMake(make);
+        instrument.setSerialNo(serialNo);
+        instrument.setLocation(location);
+        instrument.setCalibrationValidTo(calibrationValidTo);
+        instrument.setStatus(Instrument.Status.valueOf(status));
+        instrument.setQuantity(quantity);
+        instrument.setOwnerScientist(authenticatedOwner);
+
+        // Save image file if attached
+        if (photo != null && !photo.isEmpty()) {
+            String photoPath = fileStorageService.saveFile(photo);
+            instrument.setPhotoPath(photoPath); // Persists /uploads/conditions/uuid.jpg
+        }
+
+        return instrumentRepository.save(instrument);
     }
 
     /**

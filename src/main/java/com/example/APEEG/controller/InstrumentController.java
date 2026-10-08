@@ -5,7 +5,9 @@ import com.example.APEEG.service.InstrumentService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -78,6 +80,63 @@ public class InstrumentController {
             return ResponseEntity.notFound().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        }
+    }
+
+    /**
+     * 1. Standard JSON Endpoint (Without photo upload)
+     * Header: Content-Type: application/json
+     */
+    @PostMapping(consumes = {"application/json"})
+    public ResponseEntity<?> createInstrumentJson(@RequestBody Instrument instrument) {
+        try {
+            Instrument saved = instrumentService.createInstrument(instrument);
+            return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    /**
+     * 2. Multipart Form-Data Endpoint (With instrument photo upload)
+     * Header: Content-Type: multipart/form-data
+     */
+    @PostMapping(consumes = {"multipart/form-data"})
+    public ResponseEntity<?> createInstrumentWithPhoto(
+            @RequestParam("asset_id") String assetId,
+            @RequestParam("name") String name,
+            @RequestParam("make") String make,
+            @RequestParam(value = "serial_no", required = false) String serialNo,
+            @RequestParam("location") String location,
+            @RequestParam(value = "calibration_valid_to", required = false) String calibrationValidTo,
+            @RequestParam(value = "status", required = false, defaultValue = "AVAILABLE") String status,
+            @RequestParam(value = "quantity", required = false, defaultValue = "1") Integer quantity,
+            @RequestPart(value = "photo", required = false) MultipartFile photo) {
+
+        try {
+            LocalDate parsedCalibrationDate = (calibrationValidTo != null && !calibrationValidTo.trim().isEmpty())
+                    ? LocalDate.parse(calibrationValidTo)
+                    : null;
+
+            Instrument saved = instrumentService.createInstrumentWithPhoto(
+                    assetId,
+                    name,
+                    make,
+                    serialNo,
+                    location,
+                    parsedCalibrationDate,
+                    status,
+                    quantity,
+                    photo
+            );
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to add instrument: " + e.getMessage());
         }
     }
 }
