@@ -37,7 +37,8 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // 4. Configure Endpoint Access Rules
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/api/persons/login").permitAll() // Public auth routes
+                        .requestMatchers("/api/auth/**", "/api/persons/login").permitAll()
+                        .requestMatchers("/uploads/**").permitAll()// Public auth routes
                         .anyRequest().authenticated()                                     // Protected domain routes
                 )
                 // 5. Attach JWT Filter

@@ -9,8 +9,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        // Serve uploaded condition pictures publicly
+        // Expose local uploads directory at http://localhost:8080/uploads/...
         registry.addResourceHandler("/uploads/**")
-                .addResourceLocations("file:uploads/");
+                .addResourceLocations("file:uploads/", "file:./uploads/");
     }
 }

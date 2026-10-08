@@ -1,5 +1,6 @@
 package com.example.APEEG.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.Data;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.DBRef;
@@ -24,10 +25,11 @@ public class IssueRecord {
     private Person ownerScientist;
 
     // REMOVE @DBRef HERE so MongoDB embeds the Person snapshot directly
+    // Embedded or snapshot Person reference - NO unique index here!
     @Field("borrower_scientist")
     @JsonProperty("borrower_scientist")
+    @JsonAlias("borrowerScientist")
     private Person borrowerScientist;
-
     @Field("staff_name")
     @JsonProperty("staff_name")
     private String staffName;
