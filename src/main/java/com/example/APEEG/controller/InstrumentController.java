@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -84,7 +85,7 @@ public class InstrumentController {
     }
 
     /**
-     * 1. Standard JSON Endpoint (Without photo upload)
+     * Standard JSON Endpoint (Without photo upload)
      * Header: Content-Type: application/json
      */
     @PostMapping(consumes = {"application/json"})
@@ -98,7 +99,7 @@ public class InstrumentController {
     }
 
     /**
-     * 2. Multipart Form-Data Endpoint (With instrument photo upload)
+     * Multipart Form-Data Endpoint (With photo, purchase date & cost upload)
      * Header: Content-Type: multipart/form-data
      */
     @PostMapping(consumes = {"multipart/form-data"})
@@ -109,22 +110,34 @@ public class InstrumentController {
             @RequestParam(value = "serial_no", required = false) String serialNo,
             @RequestParam("location") String location,
             @RequestParam(value = "calibration_valid_to", required = false) String calibrationValidTo,
+            @RequestParam(value = "purchase_date", required = false) String purchaseDate,
+            @RequestParam(value = "purchase_cost", required = false) BigDecimal purchaseCost,
             @RequestParam(value = "status", required = false, defaultValue = "AVAILABLE") String status,
             @RequestParam(value = "quantity", required = false, defaultValue = "1") Integer quantity,
             @RequestPart(value = "photo", required = false) MultipartFile photo) {
 
         try {
+            if (assetId == null || assetId.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body("Validation Error: asset_id is required.");
+            }
+
             LocalDate parsedCalibrationDate = (calibrationValidTo != null && !calibrationValidTo.trim().isEmpty())
-                    ? LocalDate.parse(calibrationValidTo)
+                    ? LocalDate.parse(calibrationValidTo.trim())
+                    : null;
+
+            LocalDate parsedPurchaseDate = (purchaseDate != null && !purchaseDate.trim().isEmpty())
+                    ? LocalDate.parse(purchaseDate.trim())
                     : null;
 
             Instrument saved = instrumentService.createInstrumentWithPhoto(
-                    assetId,
-                    name,
-                    make,
-                    serialNo,
-                    location,
+                    assetId.trim(),
+                    name.trim(),
+                    make.trim(),
+                    serialNo != null ? serialNo.trim() : null,
+                    location.trim(),
                     parsedCalibrationDate,
+                    parsedPurchaseDate,
+                    purchaseCost,
                     status,
                     quantity,
                     photo

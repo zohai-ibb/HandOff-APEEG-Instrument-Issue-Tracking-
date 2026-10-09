@@ -10,14 +10,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+
 @Service
 public class InstrumentService {
 
     private final InstrumentRepository instrumentRepository;
-    private final FileStorageService fileStorageService; // Declared dependency
+    private final FileStorageService fileStorageService;
 
     public InstrumentService(InstrumentRepository instrumentRepository,
                              FileStorageService fileStorageService) {
@@ -58,17 +60,14 @@ public class InstrumentService {
             throw new IllegalArgumentException("Asset ID " + instrument.getAssetId() + " is already registered.");
         }
 
-        // 1. EXTRACT AUTHENTICATED SCIENTIST FROM JWT SECURITY CONTEXT
         Person authenticatedScientist = getAuthenticatedScientist();
 
         if (authenticatedScientist == null) {
             throw new SecurityException("Unauthorized: No authenticated scientist found in session context.");
         }
 
-        // 2. OVERWRITE/ENFORCE OWNERSHIP: Always lock ownership to the token holder
         instrument.setOwnerScientist(authenticatedScientist);
 
-        // 3. Set default status if missing
         if (instrument.getStatus() == null) {
             instrument.setStatus(Instrument.Status.AVAILABLE);
         }
@@ -82,7 +81,6 @@ public class InstrumentService {
 
         Person loggedInScientist = getAuthenticatedScientist();
 
-        // Enforce Ownership Verification for Updates
         if (loggedInScientist != null && existing.getOwnerScientist() != null) {
             if (!existing.getOwnerScientist().getId().equals(loggedInScientist.getId())) {
                 throw new SecurityException("Forbidden: You are not the owner of this instrument and cannot update it.");
@@ -111,7 +109,6 @@ public class InstrumentService {
 
         Person loggedInScientist = getAuthenticatedScientist();
 
-        // Enforce Ownership Verification for Deletions
         if (loggedInScientist != null && existing.getOwnerScientist() != null) {
             if (!existing.getOwnerScientist().getId().equals(loggedInScientist.getId())) {
                 throw new SecurityException("Forbidden: You are not the owner of this instrument and cannot delete it.");
@@ -121,8 +118,9 @@ public class InstrumentService {
         instrumentRepository.deleteById(id);
     }
 
-    // Inside InstrumentService.java
-
+    /**
+     * Creates an instrument record with photo, purchase date, and cost details.
+     */
     public Instrument createInstrumentWithPhoto(
             String assetId,
             String name,
@@ -130,11 +128,17 @@ public class InstrumentService {
             String serialNo,
             String location,
             LocalDate calibrationValidTo,
+            LocalDate purchaseDate,
+            BigDecimal purchaseCost,
             String status,
             Integer quantity,
             MultipartFile photo) throws IOException {
 
-        Person authenticatedOwner = getAuthenticatedScientist(); // Resolves caller from JWT Context
+        if (assetId != null && instrumentRepository.findByAssetId(assetId).isPresent()) {
+            throw new IllegalArgumentException("Asset ID '" + assetId + "' is already registered.");
+        }
+
+        Person authenticatedOwner = getAuthenticatedScientist();
 
         Instrument instrument = new Instrument();
         instrument.setAssetId(assetId);
@@ -143,22 +147,25 @@ public class InstrumentService {
         instrument.setSerialNo(serialNo);
         instrument.setLocation(location);
         instrument.setCalibrationValidTo(calibrationValidTo);
-        instrument.setStatus(Instrument.Status.valueOf(status));
-        instrument.setQuantity(quantity);
+        instrument.setPurchaseDate(purchaseDate);
+        instrument.setPurchaseCost(purchaseCost);
+        instrument.setQuantity(quantity != null ? quantity : 1);
         instrument.setOwnerScientist(authenticatedOwner);
 
-        // Save image file if attached
+        try {
+            instrument.setStatus(status != null ? Instrument.Status.valueOf(status.toUpperCase()) : Instrument.Status.AVAILABLE);
+        } catch (IllegalArgumentException e) {
+            instrument.setStatus(Instrument.Status.AVAILABLE);
+        }
+
         if (photo != null && !photo.isEmpty()) {
             String photoPath = fileStorageService.saveFile(photo);
-            instrument.setPhotoPath(photoPath); // Persists /uploads/conditions/uuid.jpg
+            instrument.setPhotoPath(photoPath);
         }
 
         return instrumentRepository.save(instrument);
     }
 
-    /**
-     * Helper method to retrieve the authenticated scientist from SecurityContextHolder
-     */
     private Person getAuthenticatedScientist() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         if (principal instanceof Person) {
