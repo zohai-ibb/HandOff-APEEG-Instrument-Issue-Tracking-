@@ -71,18 +71,18 @@ public class InstrumentController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         }
     }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteInstrument(@PathVariable String id) {
-        try {
-            instrumentService.deleteInstrument(id);
-            return ResponseEntity.noContent().build();
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.notFound().build();
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-        }
-    }
+//
+//    @DeleteMapping("/{id}")
+//    public ResponseEntity<?> deleteInstrument(@PathVariable String id) {
+//        try {
+//            instrumentService.deleteInstrument(id);
+//            return ResponseEntity.noContent().build();
+//        } catch (IllegalArgumentException e) {
+//            return ResponseEntity.notFound().build();
+//        } catch (SecurityException e) {
+//            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+//        }
+//    }
 
     /**
      * Standard JSON Endpoint (Without photo upload)
@@ -150,6 +150,96 @@ public class InstrumentController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Failed to add instrument: " + e.getMessage());
+        }
+    }
+    /**
+     * Multipart Form-Data Update Endpoint
+     * Route: PUT /api/instruments/{id}
+     */
+    /**
+     * Multipart Form-Data Update Endpoint
+     * Route: PUT /api/instruments/{id}
+     */
+    @PutMapping(value = "/{id}", consumes = {"multipart/form-data"})
+    public ResponseEntity<?> updateInstrumentMultipart(
+            @PathVariable String id,
+            @RequestParam(value = "asset_id", required = false) String assetIdSnake,
+            @RequestParam(value = "assetId", required = false) String assetIdCamel,
+            @RequestParam(value = "name", required = false) String name,
+            @RequestParam(value = "make", required = false) String make,
+            @RequestParam(value = "serial_no", required = false) String serialNoSnake,
+            @RequestParam(value = "serialNo", required = false) String serialNoCamel,
+            @RequestParam(value = "location", required = false) String location,
+            @RequestParam(value = "calibration_valid_to", required = false) String calibSnake,
+            @RequestParam(value = "calibrationValidTo", required = false) String calibCamel,
+            @RequestParam(value = "purchase_date", required = false) String purchaseDateSnake,
+            @RequestParam(value = "purchaseDate", required = false) String purchaseDateCamel,
+            @RequestParam(value = "purchase_cost", required = false) String purchaseCostStr,
+            @RequestParam(value = "photo", required = false) MultipartFile photo) {
+
+        try {
+            String finalAssetId = (assetIdSnake != null && !assetIdSnake.isEmpty()) ? assetIdSnake : assetIdCamel;
+            String finalSerialNo = (serialNoSnake != null && !serialNoSnake.isEmpty()) ? serialNoSnake : serialNoCamel;
+            String finalCalibStr = (calibSnake != null && !calibSnake.isEmpty()) ? calibSnake : calibCamel;
+            String finalPurchaseDateStr = (purchaseDateSnake != null && !purchaseDateSnake.isEmpty()) ? purchaseDateSnake : purchaseDateCamel;
+
+            LocalDate parsedCalibDate = (finalCalibStr != null && !finalCalibStr.trim().isEmpty())
+                    ? LocalDate.parse(finalCalibStr.trim())
+                    : null;
+
+            LocalDate parsedPurchaseDate = (finalPurchaseDateStr != null && !finalPurchaseDateStr.trim().isEmpty())
+                    ? LocalDate.parse(finalPurchaseDateStr.trim())
+                    : null;
+
+            BigDecimal parsedPurchaseCost = (purchaseCostStr != null && !purchaseCostStr.trim().isEmpty())
+                    ? new BigDecimal(purchaseCostStr.trim())
+                    : null;
+
+            Instrument updated = instrumentService.updateInstrumentWithPhoto(
+                    id,
+                    finalAssetId,
+                    name,
+                    make,
+                    finalSerialNo,
+                    location,
+                    parsedCalibDate,
+                    parsedPurchaseDate,
+                    parsedPurchaseCost,
+                    photo
+            );
+
+            return ResponseEntity.ok(updated);
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to update instrument: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Fallback JSON Endpoint
+     */
+    @PutMapping(value = "/{id}", consumes = {"application/json"})
+    public ResponseEntity<?> updateInstrumentJson(
+            @PathVariable String id,
+            @RequestBody Instrument details) {
+        try {
+            Instrument updated = instrumentService.updateInstrument(id, details);
+            return ResponseEntity.ok(updated);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteInstrument(@PathVariable String id) {
+        try {
+            instrumentService.deleteInstrument(id);
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
         }
     }
 }

@@ -166,6 +166,43 @@ public class InstrumentService {
         return instrumentRepository.save(instrument);
     }
 
+    public Instrument updateInstrumentWithPhoto(
+            String id,
+            String assetId,
+            String name,
+            String make,
+            String serialNo,
+            String location,
+            LocalDate calibrationValidTo,
+            LocalDate purchaseDate,
+            BigDecimal purchaseCost,
+            MultipartFile photo) throws IOException {
+
+        Instrument existing = instrumentRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Instrument not found with ID: " + id));
+
+        // Update basic text attributes if provided
+        if (assetId != null && !assetId.trim().isEmpty()) existing.setAssetId(assetId.trim());
+        if (name != null && !name.trim().isEmpty()) existing.setName(name.trim());
+        if (make != null) existing.setMake(make.trim());
+        if (serialNo != null) existing.setSerialNo(serialNo.trim());
+        if (location != null) existing.setLocation(location.trim());
+
+        // Update dates & costs
+        existing.setCalibrationValidTo(calibrationValidTo);
+        existing.setPurchaseDate(purchaseDate);
+        existing.setPurchaseCost(purchaseCost);
+
+        // PRESERVE EXISTING PHOTO: Only overwrite photoPath if a NEW photo file is uploaded
+        if (photo != null && !photo.isEmpty()) {
+            String newPhotoPath = fileStorageService.saveFile(photo);
+            existing.setPhotoPath(newPhotoPath);
+        }
+
+        return instrumentRepository.save(existing);
+    }
+
+
     private Person getAuthenticatedScientist() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         if (principal instanceof Person) {
