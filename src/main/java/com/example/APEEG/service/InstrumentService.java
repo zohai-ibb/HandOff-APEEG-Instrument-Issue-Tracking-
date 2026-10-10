@@ -181,6 +181,18 @@ public class InstrumentService {
         Instrument existing = instrumentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Instrument not found with ID: " + id));
 
+        // SECURITY GUARD: Prevent editing if instrument is ISSUED or under MAINTENANCE
+        if (existing.getStatus() != Instrument.Status.AVAILABLE) {
+            throw new SecurityException("Forbidden: Cannot edit an instrument while it is currently " + existing.getStatus() + ".");
+        }
+
+        Person loggedInScientist = getAuthenticatedScientist();
+        if (loggedInScientist != null && existing.getOwnerScientist() != null) {
+            if (!existing.getOwnerScientist().getId().equals(loggedInScientist.getId())) {
+                throw new SecurityException("Forbidden: You are not the owner of this instrument.");
+            }
+        }
+
         // Update basic text attributes if provided
         if (assetId != null && !assetId.trim().isEmpty()) existing.setAssetId(assetId.trim());
         if (name != null && !name.trim().isEmpty()) existing.setName(name.trim());
