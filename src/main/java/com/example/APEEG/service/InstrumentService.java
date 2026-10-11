@@ -132,7 +132,8 @@ public class InstrumentService {
             BigDecimal purchaseCost,
             String status,
             Integer quantity,
-            MultipartFile photo) throws IOException {
+            MultipartFile photo,
+            MultipartFile qrPhoto) throws IOException {
 
         if (assetId != null && instrumentRepository.findByAssetId(assetId).isPresent()) {
             throw new IllegalArgumentException("Asset ID '" + assetId + "' is already registered.");
@@ -161,6 +162,12 @@ public class InstrumentService {
         if (photo != null && !photo.isEmpty()) {
             String photoPath = fileStorageService.saveFile(photo);
             instrument.setPhotoPath(photoPath);
+        }
+
+        // Save generated QR photo path
+        if (qrPhoto != null && !qrPhoto.isEmpty()) {
+            String qrPath = fileStorageService.saveFile(qrPhoto);
+            instrument.setQrPhoto(qrPath);
         }
 
         return instrumentRepository.save(instrument);

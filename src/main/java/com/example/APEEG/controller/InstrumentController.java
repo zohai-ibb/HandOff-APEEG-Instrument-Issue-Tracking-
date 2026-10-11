@@ -114,7 +114,8 @@ public class InstrumentController {
             @RequestParam(value = "purchase_cost", required = false) BigDecimal purchaseCost,
             @RequestParam(value = "status", required = false, defaultValue = "AVAILABLE") String status,
             @RequestParam(value = "quantity", required = false, defaultValue = "1") Integer quantity,
-            @RequestPart(value = "photo", required = false) MultipartFile photo) {
+            @RequestPart(value = "photo", required = false) MultipartFile photo,
+            @RequestPart(value = "qrPhoto", required = false) MultipartFile qrPhoto) {
 
         try {
             if (assetId == null || assetId.trim().isEmpty()) {
@@ -140,7 +141,8 @@ public class InstrumentController {
                     purchaseCost,
                     status,
                     quantity,
-                    photo
+                    photo,
+                    qrPhoto
             );
 
             return ResponseEntity.status(HttpStatus.CREATED).body(saved);
