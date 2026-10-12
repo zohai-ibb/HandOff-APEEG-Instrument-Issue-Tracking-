@@ -51,6 +51,18 @@ public class InstrumentService {
     }
 
     /**
+     * SECURED: Returns ONLY instruments belonging to the currently authenticated scientist.
+     * Extracts identity from JWT Security Context.
+     */
+    public List<Instrument> getMyInstruments() {
+        Person authenticatedScientist = getAuthenticatedScientist();
+        if (authenticatedScientist == null) {
+            throw new SecurityException("Unauthorized: Valid scientist authentication required.");
+        }
+        return instrumentRepository.findByOwnerScientistId(authenticatedScientist.getId());
+    }
+
+    /**
      * Creates a new instrument in the inventory.
      * SECURED: Automatically sets the authenticated user as the ownerScientist.
      */

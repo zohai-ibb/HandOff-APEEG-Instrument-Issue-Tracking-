@@ -21,21 +21,34 @@ public class InstrumentController {
         this.instrumentService = instrumentService;
     }
 
+    // GET: /api/instruments/my-inventory - Logged-in scientist inventory
+    @GetMapping("/my-inventory")
+    public ResponseEntity<List<Instrument>> getMyInventory() {
+        try {
+            List<Instrument> instruments = instrumentService.getMyInstruments();
+            return ResponseEntity.ok(instruments);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+    }
+
+    // GET: /api/instruments/scan/{assetId} - PathVariable QR code scanner
+    @GetMapping("/scan/{assetId}")
+    public ResponseEntity<Instrument> getByAssetId(@PathVariable String assetId) {
+        return instrumentService.getByAssetId(assetId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    // GET: /api/instruments - Fetch all instruments
     @GetMapping
-    public List<Instrument> getAllInstruments() {
-        return instrumentService.getAllInstruments();
+    public ResponseEntity<List<Instrument>> getAllInstruments() {
+        return ResponseEntity.ok(instrumentService.getAllInstruments());
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Instrument> getInstrumentById(@PathVariable String id) {
         return instrumentService.getInstrumentById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
-
-    @GetMapping("/scan")
-    public ResponseEntity<Instrument> getByAssetId(@RequestParam String assetId) {
-        return instrumentService.getByAssetId(assetId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
