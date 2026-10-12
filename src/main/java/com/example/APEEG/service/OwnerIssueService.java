@@ -23,17 +23,20 @@ public class OwnerIssueService {
     private final ScientistListRepository scientistListRepository;
     private final MailSchedulerService mailSchedulerService;
     private final FileStorageService fileStorageService;
+    private final StaffMemberService staffMemberService;
 
     public OwnerIssueService(IssueRecordRepository issueRecordRepository,
                              InstrumentRepository instrumentRepository,
                              ScientistListRepository scientistListRepository,
                              MailSchedulerService mailSchedulerService,
-                             FileStorageService fileStorageService) {
+                             FileStorageService fileStorageService,
+                             StaffMemberService staffMemberService) {
         this.issueRecordRepository = issueRecordRepository;
         this.instrumentRepository = instrumentRepository;
         this.scientistListRepository = scientistListRepository;
         this.mailSchedulerService = mailSchedulerService;
         this.fileStorageService = fileStorageService;
+        this.staffMemberService = staffMemberService;
     }
 
     /**
@@ -53,6 +56,11 @@ public class OwnerIssueService {
         Person authenticatedOwner = getAuthenticatedScientist();
         if (authenticatedOwner == null) {
             throw new SecurityException("Unauthorized: Valid scientist authentication required.");
+        }
+
+        // 1.5. Automatically save/update the staff member details under the authenticated scientist
+        if (staffName != null && !staffName.trim().isEmpty() && staffEmail != null && !staffEmail.trim().isEmpty()) {
+            staffMemberService.saveOrGetStaffMember(staffName, staffEmail, null, authenticatedOwner.getDepartment());
         }
 
         // 2. Validate & Fetch Target Instrument
