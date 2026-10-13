@@ -192,6 +192,7 @@ public class InstrumentService {
             String make,
             String serialNo,
             String location,
+            String statusStr, // <-- ADDED
             LocalDate calibrationValidTo,
             LocalDate purchaseDate,
             BigDecimal purchaseCost,
@@ -200,31 +201,25 @@ public class InstrumentService {
         Instrument existing = instrumentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Instrument not found with ID: " + id));
 
-        // SECURITY GUARD: Prevent editing if instrument is ISSUED or under MAINTENANCE
-        if (existing.getStatus() != Instrument.Status.AVAILABLE) {
-            throw new SecurityException("Forbidden: Cannot edit an instrument while it is currently " + existing.getStatus() + ".");
-        }
-
-        Person loggedInScientist = getAuthenticatedScientist();
-        if (loggedInScientist != null && existing.getOwnerScientist() != null) {
-            if (!existing.getOwnerScientist().getId().equals(loggedInScientist.getId())) {
-                throw new SecurityException("Forbidden: You are not the owner of this instrument.");
-            }
-        }
-
-        // Update basic text attributes if provided
         if (assetId != null && !assetId.trim().isEmpty()) existing.setAssetId(assetId.trim());
         if (name != null && !name.trim().isEmpty()) existing.setName(name.trim());
         if (make != null) existing.setMake(make.trim());
         if (serialNo != null) existing.setSerialNo(serialNo.trim());
         if (location != null) existing.setLocation(location.trim());
 
-        // Update dates & costs
+        // Update status if present
+        if (statusStr != null && !statusStr.trim().isEmpty()) {
+            try {
+                existing.setStatus(Instrument.Status.valueOf(statusStr.trim().toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                // Ignore invalid status value
+            }
+        }
+
         existing.setCalibrationValidTo(calibrationValidTo);
         existing.setPurchaseDate(purchaseDate);
         existing.setPurchaseCost(purchaseCost);
 
-        // PRESERVE EXISTING PHOTO: Only overwrite photoPath if a NEW photo file is uploaded
         if (photo != null && !photo.isEmpty()) {
             String newPhotoPath = fileStorageService.saveFile(photo);
             existing.setPhotoPath(newPhotoPath);

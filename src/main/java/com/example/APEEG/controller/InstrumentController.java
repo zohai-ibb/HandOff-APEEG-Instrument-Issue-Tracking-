@@ -172,10 +172,6 @@ public class InstrumentController {
      * Multipart Form-Data Update Endpoint
      * Route: PUT /api/instruments/{id}
      */
-    /**
-     * Multipart Form-Data Update Endpoint
-     * Route: PUT /api/instruments/{id}
-     */
     @PutMapping(value = "/{id}", consumes = {"multipart/form-data"})
     public ResponseEntity<?> updateInstrumentMultipart(
             @PathVariable String id,
@@ -186,6 +182,7 @@ public class InstrumentController {
             @RequestParam(value = "serial_no", required = false) String serialNoSnake,
             @RequestParam(value = "serialNo", required = false) String serialNoCamel,
             @RequestParam(value = "location", required = false) String location,
+            @RequestParam(value = "status", required = false) String status, // <-- ADD STATUS PARAMETER
             @RequestParam(value = "calibration_valid_to", required = false) String calibSnake,
             @RequestParam(value = "calibrationValidTo", required = false) String calibCamel,
             @RequestParam(value = "purchase_date", required = false) String purchaseDateSnake,
@@ -218,6 +215,7 @@ public class InstrumentController {
                     make,
                     finalSerialNo,
                     location,
+                    status, // <-- PASS STATUS TO SERVICE
                     parsedCalibDate,
                     parsedPurchaseDate,
                     parsedPurchaseCost,
