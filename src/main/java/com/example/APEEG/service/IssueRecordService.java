@@ -219,6 +219,56 @@ public class IssueRecordService {
         return Optional.of(updatedRecord);
     }
 
+    /**
+     * Reissues an active instrument loan by updating its due date to a future date.
+     */
+    @Transactional
+    public Optional<IssueRecord> reissueInstrument(String issueRecordId, String newDueDateStr) {
+        // 1. Fetch existing issue record
+        IssueRecord record = issueRecordRepository.findById(issueRecordId)
+                .orElseThrow(() -> new IllegalArgumentException("Issue record not found with ID: " + issueRecordId));
+
+        if (record.getState() == IssueRecord.State.RETURNED) {
+            throw new IllegalStateException("Cannot reissue an instrument that has already been returned.");
+        }
+
+        // 2. Stakeholder Authorization Safeguard
+        Person authenticatedUser = getAuthenticatedScientist();
+        if (authenticatedUser != null) {
+            boolean isOwner = record.getOwnerScientist() != null
+                    && authenticatedUser.getId().equals(record.getOwnerScientist().getId());
+
+            boolean isBorrower = record.getBorrowerScientist() != null
+                    && authenticatedUser.getId().equals(record.getBorrowerScientist().getId());
+
+            if (!isOwner && !isBorrower) {
+                throw new SecurityException("Forbidden: Only the borrowing scientist or owner scientist can reissue this instrument.");
+            }
+        }
+
+        // 3. Parse and validate new due date
+        LocalDate newDueDate = LocalDate.parse(newDueDateStr);
+        if (newDueDate.isBefore(LocalDate.now())) {
+            throw new IllegalArgumentException("New due date must be today or a future date.");
+        }
+
+        // 4. Update the due date
+        record.setDueDate(newDueDate);
+
+        IssueRecord savedRecord = issueRecordRepository.save(record);
+
+        // 5. Optional: Send Reissue Confirmation Email
+        try {
+            if (mailSchedulerService != null) {
+                // mailSchedulerService.sendReissueConfirmation(savedRecord);
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to send reissue notification email: " + e.getMessage());
+        }
+
+        return Optional.of(savedRecord);
+    }
+
     private Person getAuthenticatedScientist() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         if (principal instanceof Person) {

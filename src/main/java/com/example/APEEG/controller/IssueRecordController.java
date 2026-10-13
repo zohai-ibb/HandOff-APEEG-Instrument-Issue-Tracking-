@@ -71,6 +71,37 @@ public class IssueRecordController {
     }
 
     /**
+     * PUT /api/issue-records/{id}
+     * Updates an existing issue record (e.g., Reissuing/extending due date).
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateIssueRecord(
+            @PathVariable String id,
+            @RequestBody Map<String, Object> payload) {
+
+        try {
+            // Extract due_date or dueDate from request payload
+            String dueDateStr = (String) payload.getOrDefault("due_date", payload.get("dueDate"));
+
+            if (dueDateStr == null || dueDateStr.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body("Due date is required for reissue.");
+            }
+
+            return issueRecordService.reissueInstrument(id, dueDateStr)
+                    .map(ResponseEntity::ok)
+                    .orElse(ResponseEntity.notFound().build());
+
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to reissue instrument: " + e.getMessage());
+        }
+    }
+
+    /**
      * 1. JSON Return Endpoint
      * Body JSON: { "condition_in": "GOOD" } or { "condition_in": "BAD" }
      */
