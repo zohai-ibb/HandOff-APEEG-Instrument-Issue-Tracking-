@@ -2,6 +2,7 @@ package com.example.APEEG.service;
 
 import com.example.APEEG.model.Instrument;
 import com.example.APEEG.model.IssueRecord;
+import com.example.APEEG.model.MailLog;
 import com.example.APEEG.model.Person;
 import com.example.APEEG.repository.InstrumentRepository;
 import com.example.APEEG.repository.IssueRecordRepository;
@@ -23,15 +24,18 @@ public class IssueRecordService {
     private final InstrumentRepository instrumentRepository;
     private final MailSchedulerService mailSchedulerService;
     private final FileStorageService fileStorageService;
+    private final EmailService emailService;
 
     public IssueRecordService(IssueRecordRepository issueRecordRepository,
                               InstrumentRepository instrumentRepository,
                               MailSchedulerService mailSchedulerService,
-                              FileStorageService fileStorageService) {
+                              FileStorageService fileStorageService,
+                              EmailService emailService) {
         this.issueRecordRepository = issueRecordRepository;
         this.instrumentRepository = instrumentRepository;
         this.mailSchedulerService = mailSchedulerService;
         this.fileStorageService = fileStorageService;
+        this.emailService = emailService;
     }
 
     public List<IssueRecord> getMyIssueRecords() {
@@ -268,6 +272,58 @@ public class IssueRecordService {
 
         return Optional.of(savedRecord);
     }
+
+    /**
+     * Send Manual Reminder: Dispatches an instant overdue/reminder email to stakeholders.
+     */
+    public void sendManualReminder(String recordId) {
+        IssueRecord record = issueRecordRepository.findById(recordId)
+                .orElseThrow(() -> new IllegalArgumentException("Issue record not found with ID: " + recordId));
+
+        if (record.getState() == IssueRecord.State.RETURNED) {
+            throw new IllegalStateException("Cannot send reminder for an instrument that has already been returned.");
+        }
+
+        // Construct reminder email details
+        Instrument instrument = record.getInstrument();
+        String instrumentName = instrument != null ? instrument.getName() : "Instrument";
+        String assetId = instrument != null ? instrument.getAssetId() : "N/A";
+
+        String subject = "[APEEG REMINDER] Return Notice: " + instrumentName;
+        String body = "REMINDER: The instrument " + instrumentName + " (" + assetId + ") is due/overdue."
+                + "\nExpected Return Date: " + record.getDueDate()
+                + "\nBorrower: " + (record.getBorrowerScientist() != null ? record.getBorrowerScientist().getName() : "N/A")
+                + "\nStaff Handler: " + record.getStaffName()
+                + "\n\nPlease arrange for its return to the laboratory.";
+
+        String recipients = buildRecipients(record);
+
+        emailService.sendAndLogEmail(
+                record,
+                instrument,
+                MailLog.MailType.OVERDUE,
+                recipients,
+                subject,
+                body
+        );
+    }
+
+    private String buildRecipients(IssueRecord record) {
+        StringBuilder recipients = new StringBuilder();
+        if (record.getBorrowerScientist() != null && record.getBorrowerScientist().getEmail() != null) {
+            recipients.append(record.getBorrowerScientist().getEmail());
+        }
+        if (record.getStaffEmail() != null && !record.getStaffEmail().trim().isEmpty()) {
+            if (recipients.length() > 0) recipients.append(", ");
+            recipients.append(record.getStaffEmail());
+        }
+        if (record.getOwnerScientist() != null && record.getOwnerScientist().getEmail() != null) {
+            if (recipients.length() > 0) recipients.append(", ");
+            recipients.append(record.getOwnerScientist().getEmail());
+        }
+        return recipients.toString();
+    }
+
 
     private Person getAuthenticatedScientist() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();

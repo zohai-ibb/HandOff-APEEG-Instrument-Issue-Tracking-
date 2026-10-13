@@ -146,34 +146,94 @@ public class MailSchedulerService {
     }
 
     /**
-     * Daily Overdue Chasing: Dispatched every single day after due date passes until returned.
+     * Overdue Chasing:
+     * Sends an overdue reminder every 3 days after the due date
+     * until the instrument is returned.
      */
     private void processOverdueReminders(LocalDate today) {
-        List<IssueRecord> openRecords = issueRecordRepository.findByState(IssueRecord.State.OPEN);
+
+        List<IssueRecord> openRecords =
+                issueRecordRepository.findByState(IssueRecord.State.OPEN);
 
         for (IssueRecord record : openRecords) {
-            if (record.getDueDate() != null && record.getDueDate().isBefore(today)) {
-                long daysOverdue = ChronoUnit.DAYS.between(record.getDueDate(), today);
 
-                if (!isAlreadyMailedToday(record.getId(), MailLog.MailType.OVERDUE, today)) {
-                    String recipients = buildRecipients(record, true); // Copies Owner Scientist on overdue notices
-                    String subject = "[APEEG OVERDUE] Immediate Action Required: " + record.getInstrument().getName();
-                    String body = "OVERDUE NOTICE: The instrument " + record.getInstrument().getName()
-                            + " (" + record.getInstrument().getAssetId() + ") is " + daysOverdue
-                            + " day(s) overdue.\nExpected Return Date: " + record.getDueDate()
-                            + "\nBorrowing Scientist: " + (record.getBorrowerScientist() != null ? record.getBorrowerScientist().getName() : "N/A")
-                            + "\nIntermediary Staff: " + record.getStaffName() + " (" + record.getStaffEmail() + ")"
-                            + "\n\nPlease return the item immediately to the lab.";
+            // Skip records without a due date
+            if (record.getDueDate() == null) {
+                continue;
+            }
 
-                    emailService.sendAndLogEmail(
-                            record,
-                            record.getInstrument(),
-                            MailLog.MailType.OVERDUE,
-                            recipients,
-                            subject,
-                            body
-                    );
+            // Only process records whose due date has already passed
+            if (record.getDueDate().isBefore(today)) {
+
+                long daysOverdue =
+                        ChronoUnit.DAYS.between(record.getDueDate(), today);
+
+                /*
+                 * Send reminder every 3 days:
+                 *
+                 * 1 day overdue  -> Send
+                 * 2 days overdue -> No
+                 * 3 days overdue -> No
+                 * 4 days overdue -> Send
+                 * 5 days overdue -> No
+                 * 6 days overdue -> No
+                 * 7 days overdue -> Send
+                 *
+                 * If you want the FIRST email exactly on the 3rd overdue
+                 * day instead, change this condition to:
+                 *
+                 * daysOverdue % 3 == 0
+                 */
+                if ((daysOverdue - 1) % 3 != 0) {
+                    continue;
                 }
+
+                // Extra protection against duplicate emails on the same day
+                if (isAlreadyMailedToday(
+                        record.getId(),
+                        MailLog.MailType.OVERDUE,
+                        today)) {
+                    continue;
+                }
+
+                String recipients = buildRecipients(record, true);
+
+                String subject =
+                        "[APEEG OVERDUE] Immediate Action Required: "
+                                + record.getInstrument().getName();
+
+                String body =
+                        "OVERDUE NOTICE: The instrument "
+                                + record.getInstrument().getName()
+                                + " ("
+                                + record.getInstrument().getAssetId()
+                                + ") is "
+                                + daysOverdue
+                                + " day(s) overdue.\n"
+                                + "Expected Return Date: "
+                                + record.getDueDate()
+                                + "\n"
+                                + "Borrowing Scientist: "
+                                + (record.getBorrowerScientist() != null
+                                ? record.getBorrowerScientist().getName()
+                                : "N/A")
+                                + "\n"
+                                + "Intermediary Staff: "
+                                + record.getStaffName()
+                                + " ("
+                                + record.getStaffEmail()
+                                + ")"
+                                + "\n\n"
+                                + "Please return the item immediately to the lab.";
+
+                emailService.sendAndLogEmail(
+                        record,
+                        record.getInstrument(),
+                        MailLog.MailType.OVERDUE,
+                        recipients,
+                        subject,
+                        body
+                );
             }
         }
     }

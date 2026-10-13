@@ -102,6 +102,23 @@ public class IssueRecordController {
     }
 
     /**
+     * POST /api/issue-records/{id}/send-reminder
+     * Triggers an immediate email reminder for an active or overdue loan.
+     */
+    @PostMapping("/{id}/send-reminder")
+    public ResponseEntity<?> sendReminder(@PathVariable String id) {
+        try {
+            issueRecordService.sendManualReminder(id);
+            return ResponseEntity.ok("Reminder email dispatched successfully.");
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to send reminder email: " + e.getMessage());
+        }
+    }
+
+    /**
      * 1. JSON Return Endpoint
      * Body JSON: { "condition_in": "GOOD" } or { "condition_in": "BAD" }
      */
