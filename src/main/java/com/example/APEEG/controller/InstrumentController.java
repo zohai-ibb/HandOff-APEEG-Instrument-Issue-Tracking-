@@ -13,6 +13,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/instruments")
+@CrossOrigin(origins = "*")
 public class InstrumentController {
 
     private final InstrumentService instrumentService;
@@ -21,31 +22,17 @@ public class InstrumentController {
         this.instrumentService = instrumentService;
     }
 
-    // GET: /api/instruments/my-inventory - Logged-in scientist inventory
-    @GetMapping("/my-inventory")
-    public ResponseEntity<List<Instrument>> getMyInventory() {
-        try {
-            List<Instrument> instruments = instrumentService.getMyInstruments();
-            return ResponseEntity.ok(instruments);
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-    }
-
-    // GET: /api/instruments/scan/{assetId} - PathVariable QR code scanner
-    @GetMapping("/scan/{assetId}")
-    public ResponseEntity<Instrument> getByAssetId(@PathVariable String assetId) {
-        return instrumentService.getByAssetId(assetId)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
-
-    // GET: /api/instruments - Fetch all instruments
+    /**
+     * GET: Fetch all instruments
+     */
     @GetMapping
-    public ResponseEntity<List<Instrument>> getAllInstruments() {
-        return ResponseEntity.ok(instrumentService.getAllInstruments());
+    public List<Instrument> getAllInstruments() {
+        return instrumentService.getAllInstruments();
     }
 
+    /**
+     * GET: Fetch instrument by Mongo Document ID
+     */
     @GetMapping("/{id}")
     public ResponseEntity<Instrument> getInstrumentById(@PathVariable String id) {
         return instrumentService.getInstrumentById(id)
@@ -53,52 +40,35 @@ public class InstrumentController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    /**
+     * GET: Scan QR Code Endpoint
+     * Endpoint: GET /api/instruments/scan/{assetId}
+     */
+    @GetMapping("/scan/{assetId}")
+    public ResponseEntity<Instrument> getByAssetId(@PathVariable String assetId) {
+        return instrumentService.getByAssetId(assetId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * GET: Fetch all instruments owned by a specific scientist
+     */
     @GetMapping("/owner/{ownerId}")
     public List<Instrument> getByOwner(@PathVariable String ownerId) {
         return instrumentService.getByOwnerScientistId(ownerId);
     }
 
+    /**
+     * GET: Filter instruments by Status enum
+     */
     @GetMapping("/status/{status}")
     public List<Instrument> getByStatus(@PathVariable Instrument.Status status) {
         return instrumentService.getByStatus(status);
     }
 
-    @PostMapping
-    public ResponseEntity<?> createInstrument(@RequestBody Instrument instrument) {
-        try {
-            Instrument saved = instrumentService.createInstrument(instrument);
-            return ResponseEntity.status(HttpStatus.CREATED).body(saved);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
-    }
-
-    @PutMapping("/{id}")
-    public ResponseEntity<?> updateInstrument(@PathVariable String id, @RequestBody Instrument details) {
-        try {
-            Instrument updated = instrumentService.updateInstrument(id, details);
-            return ResponseEntity.ok(updated);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.notFound().build();
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-        }
-    }
-//
-//    @DeleteMapping("/{id}")
-//    public ResponseEntity<?> deleteInstrument(@PathVariable String id) {
-//        try {
-//            instrumentService.deleteInstrument(id);
-//            return ResponseEntity.noContent().build();
-//        } catch (IllegalArgumentException e) {
-//            return ResponseEntity.notFound().build();
-//        } catch (SecurityException e) {
-//            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-//        }
-//    }
-
     /**
-     * Standard JSON Endpoint (Without photo upload)
+     * Standard JSON Create Endpoint (Without photo upload)
      * Header: Content-Type: application/json
      */
     @PostMapping(consumes = {"application/json"})
@@ -108,11 +78,13 @@ public class InstrumentController {
             return ResponseEntity.status(HttpStatus.CREATED).body(saved);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
         }
     }
 
     /**
-     * Multipart Form-Data Endpoint (With photo, purchase date & cost upload)
+     * Multipart Form-Data Create Endpoint (With photo, QR photo, quantity, purchase date & cost)
      * Header: Content-Type: multipart/form-data
      */
     @PostMapping(consumes = {"multipart/form-data"})
@@ -158,19 +130,22 @@ public class InstrumentController {
                     qrPhoto
             );
 
-
             return ResponseEntity.status(HttpStatus.CREATED).body(saved);
 
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Failed to add instrument: " + e.getMessage());
         }
     }
+
     /**
-     * Multipart Form-Data Update Endpoint
+     * Multipart Form-Data Update Endpoint (Handles text, quantity, operational status & photo update)
      * Route: PUT /api/instruments/{id}
+     * Header: Content-Type: multipart/form-data
      */
     @PutMapping(value = "/{id}", consumes = {"multipart/form-data"})
     public ResponseEntity<?> updateInstrumentMultipart(
@@ -181,14 +156,15 @@ public class InstrumentController {
             @RequestParam(value = "make", required = false) String make,
             @RequestParam(value = "serial_no", required = false) String serialNoSnake,
             @RequestParam(value = "serialNo", required = false) String serialNoCamel,
+            @RequestParam(value = "quantity", required = false) Integer quantity,
             @RequestParam(value = "location", required = false) String location,
-            @RequestParam(value = "status", required = false) String status, // <-- ADD STATUS PARAMETER
+            @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "calibration_valid_to", required = false) String calibSnake,
             @RequestParam(value = "calibrationValidTo", required = false) String calibCamel,
             @RequestParam(value = "purchase_date", required = false) String purchaseDateSnake,
             @RequestParam(value = "purchaseDate", required = false) String purchaseDateCamel,
             @RequestParam(value = "purchase_cost", required = false) String purchaseCostStr,
-            @RequestParam(value = "photo", required = false) MultipartFile photo) {
+            @RequestPart(value = "photo", required = false) MultipartFile photo) {
 
         try {
             String finalAssetId = (assetIdSnake != null && !assetIdSnake.isEmpty()) ? assetIdSnake : assetIdCamel;
@@ -214,8 +190,9 @@ public class InstrumentController {
                     name,
                     make,
                     finalSerialNo,
+                    quantity,
                     location,
-                    status, // <-- PASS STATUS TO SERVICE
+                    status,
                     parsedCalibDate,
                     parsedPurchaseDate,
                     parsedPurchaseCost,
@@ -226,6 +203,8 @@ public class InstrumentController {
 
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Failed to update instrument: " + e.getMessage());
@@ -233,7 +212,8 @@ public class InstrumentController {
     }
 
     /**
-     * Fallback JSON Endpoint
+     * Fallback JSON Update Endpoint
+     * Header: Content-Type: application/json
      */
     @PutMapping(value = "/{id}", consumes = {"application/json"})
     public ResponseEntity<?> updateInstrumentJson(
@@ -244,9 +224,14 @@ public class InstrumentController {
             return ResponseEntity.ok(updated);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         }
     }
 
+    /**
+     * DELETE: Remove instrument record by ID
+     */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteInstrument(@PathVariable String id) {
         try {
@@ -254,6 +239,8 @@ public class InstrumentController {
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         }
     }
 }

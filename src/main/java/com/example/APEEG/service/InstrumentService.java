@@ -185,14 +185,18 @@ public class InstrumentService {
         return instrumentRepository.save(instrument);
     }
 
+    /**
+     * Updates an existing instrument record with optional photo upload and quantity updates.
+     */
     public Instrument updateInstrumentWithPhoto(
             String id,
             String assetId,
             String name,
             String make,
             String serialNo,
+            Integer quantity,
             String location,
-            String statusStr, // <-- ADDED
+            String statusStr,
             LocalDate calibrationValidTo,
             LocalDate purchaseDate,
             BigDecimal purchaseCost,
@@ -201,10 +205,18 @@ public class InstrumentService {
         Instrument existing = instrumentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Instrument not found with ID: " + id));
 
+        Person loggedInScientist = getAuthenticatedScientist();
+        if (loggedInScientist != null && existing.getOwnerScientist() != null) {
+            if (!existing.getOwnerScientist().getId().equals(loggedInScientist.getId())) {
+                throw new SecurityException("Forbidden: You are not the owner of this instrument and cannot update it.");
+            }
+        }
+
         if (assetId != null && !assetId.trim().isEmpty()) existing.setAssetId(assetId.trim());
         if (name != null && !name.trim().isEmpty()) existing.setName(name.trim());
         if (make != null) existing.setMake(make.trim());
         if (serialNo != null) existing.setSerialNo(serialNo.trim());
+        if (quantity != null && quantity > 0) existing.setQuantity(quantity);
         if (location != null) existing.setLocation(location.trim());
 
         // Update status if present
@@ -227,6 +239,7 @@ public class InstrumentService {
 
         return instrumentRepository.save(existing);
     }
+
 
 
     private Person getAuthenticatedScientist() {
