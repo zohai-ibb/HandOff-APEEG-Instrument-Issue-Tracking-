@@ -146,14 +146,9 @@ public class IssueRecordService {
         return savedRecord;
     }
 
-    /**
-     * Processes an instrument return.
-     * Enforces conditionIn as "GOOD" or "BAD".
-     * Updates Instrument.status to AVAILABLE if GOOD, or MAINTENANCE if BAD.
-     */
     @Transactional
     public Optional<IssueRecord> returnInstrument(String issueRecordId, String conditionIn, MultipartFile photo) {
-        // 1. Fetch IssueRecord
+        // 1. Fetch Issue Record
         IssueRecord record = issueRecordRepository.findById(issueRecordId)
                 .orElseThrow(() -> new IllegalArgumentException("Issue record not found with ID: " + issueRecordId));
 
@@ -161,7 +156,7 @@ public class IssueRecordService {
             throw new IllegalStateException("This instrument loan is already marked as RETURNED.");
         }
 
-        // 2. Security / Stakeholder Check
+        // 2. Validate Stakeholder Authentication
         Person authenticatedUser = getAuthenticatedScientist();
         if (authenticatedUser == null) {
             throw new SecurityException("Unauthorized: Valid scientist authentication required.");
@@ -177,13 +172,13 @@ public class IssueRecordService {
             throw new SecurityException("Forbidden: Only the borrowing scientist or owner scientist can process this return.");
         }
 
-        // 3. Validate & Resolve Binary Condition State ("GOOD" vs "BAD")
-        String resolvedCondition = "GOOD"; // Default baseline
+        // 3. Resolve Binary Condition State ("GOOD" vs "BAD")
+        String resolvedCondition = "GOOD";
         if (conditionIn != null && conditionIn.trim().equalsIgnoreCase("BAD")) {
             resolvedCondition = "BAD";
         }
 
-        // 4. Save Return Photo if provided
+        // 4. Save Return Photo if attached
         if (photo != null && !photo.isEmpty()) {
             try {
                 String photoPath = fileStorageService.saveFile(photo);
@@ -198,17 +193,46 @@ public class IssueRecordService {
         record.setActualReturnDate(LocalDate.now());
         record.setState(IssueRecord.State.RETURNED);
 
-        // 6. Update Instrument Status based on condition state
-        Instrument instrument = record.getInstrument();
-        if (instrument != null) {
-            if ("BAD".equals(resolvedCondition)) {
-                // Damaged/faulty instrument goes directly under MAINTENANCE
-                instrument.setStatus(Instrument.Status.MAINTENANCE);
+        // 6. Handle Re-merging Inventory Quantity
+        Instrument issuedInstrument = record.getInstrument();
+
+        if (issuedInstrument != null) {
+            int returnedQty = issuedInstrument.getQuantity() != null ? issuedInstrument.getQuantity() : 1;
+
+            // Check if this instrument was created as a split child item (e.g. assetId ends with timestamp)
+            if (issuedInstrument.getAssetId() != null && issuedInstrument.getAssetId().contains("-")) {
+                String baseAssetId = issuedInstrument.getAssetId().split("-")[0];
+
+                // Locate master inventory instrument by base asset ID
+                Optional<Instrument> masterOpt = instrumentRepository.findByAssetId(baseAssetId);
+
+                if (masterOpt.isPresent()) {
+                    Instrument master = masterOpt.get();
+
+                    // Restore master quantity
+                    int existingMasterQty = master.getQuantity() != null ? master.getQuantity() : 0;
+                    master.setQuantity(existingMasterQty + returnedQty);
+
+                    // Update master status if returning in BAD condition
+                    if ("BAD".equals(resolvedCondition)) {
+                        master.setStatus(Instrument.Status.MAINTENANCE);
+                    } else if (master.getStatus() == Instrument.Status.ISSUED) {
+                        master.setStatus(Instrument.Status.AVAILABLE);
+                    }
+
+                    instrumentRepository.save(master);
+
+                    // Link record to master before deleting child entry
+                    record.setInstrument(master);
+                    instrumentRepository.delete(issuedInstrument);
+                } else {
+                    // Fallback: Restore child status if master is not found
+                    updateSingleInstrumentStatus(issuedInstrument, resolvedCondition);
+                }
             } else {
-                // Good condition instrument restores to AVAILABLE
-                instrument.setStatus(Instrument.Status.AVAILABLE);
+                // Full checkout return (No split occurred)
+                updateSingleInstrumentStatus(issuedInstrument, resolvedCondition);
             }
-            instrumentRepository.save(instrument);
         }
 
         IssueRecord updatedRecord = issueRecordRepository.save(record);
@@ -221,6 +245,15 @@ public class IssueRecordService {
         }
 
         return Optional.of(updatedRecord);
+    }
+
+    private void updateSingleInstrumentStatus(Instrument instrument, String condition) {
+        if ("BAD".equals(condition)) {
+            instrument.setStatus(Instrument.Status.MAINTENANCE);
+        } else {
+            instrument.setStatus(Instrument.Status.AVAILABLE);
+        }
+        instrumentRepository.save(instrument);
     }
 
     /**

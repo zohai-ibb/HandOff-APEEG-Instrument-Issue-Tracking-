@@ -45,6 +45,7 @@ public class OwnerIssueService {
     @Transactional
     public IssueRecord issueToScientistFromList(String instrumentId,
                                                 String scientistListId,
+                                                Integer issueQuantity,
                                                 String staffName,
                                                 String staffEmail,
                                                 LocalDate dueDate,
@@ -52,38 +53,34 @@ public class OwnerIssueService {
                                                 String conditionOut,
                                                 MultipartFile photo) {
 
-        // 1. Authenticate Logged-In Instrument Owner
         Person authenticatedOwner = getAuthenticatedScientist();
         if (authenticatedOwner == null) {
             throw new SecurityException("Unauthorized: Valid scientist authentication required.");
         }
 
-
-        // 1.5. Automatically save/update the staff member details under the authenticated scientist
-        if (staffName != null && !staffName.trim().isEmpty() && staffEmail != null && !staffEmail.trim().isEmpty()) {
-            staffMemberService.saveOrGetStaffMember(staffName, staffEmail, null, authenticatedOwner.getDepartment());
-        }
-
-        // 2. Validate & Fetch Target Instrument
         if (instrumentId == null || instrumentId.trim().isEmpty()) {
             throw new IllegalArgumentException("Instrument ID is required.");
         }
 
-        Instrument instrument = instrumentRepository.findById(instrumentId)
+        Instrument masterInstrument = instrumentRepository.findById(instrumentId)
                 .orElseThrow(() -> new IllegalArgumentException("Instrument not found with ID: " + instrumentId));
 
-        // 3. Verify Instrument Ownership
-        if (instrument.getOwnerScientist() == null ||
-                !instrument.getOwnerScientist().getId().equals(authenticatedOwner.getId())) {
+        if (masterInstrument.getOwnerScientist() == null ||
+                !masterInstrument.getOwnerScientist().getId().equals(authenticatedOwner.getId())) {
             throw new SecurityException("Forbidden: You can only issue instruments from your own inventory.");
         }
 
-        // 4. Verify Instrument Availability
-        if (instrument.getStatus() != Instrument.Status.AVAILABLE) {
-            throw new IllegalStateException("Instrument is currently " + instrument.getStatus() + " and cannot be issued.");
+        if (masterInstrument.getStatus() != Instrument.Status.AVAILABLE) {
+            throw new IllegalStateException("Instrument is currently " + masterInstrument.getStatus() + " and cannot be issued.");
         }
 
-        // 5. Fetch Target Scientist Contact from ScientistList
+        int requestedQty = (issueQuantity != null && issueQuantity > 0) ? issueQuantity : 1;
+        int currentMasterQty = masterInstrument.getQuantity() != null ? masterInstrument.getQuantity() : 1;
+
+        if (requestedQty > currentMasterQty) {
+            throw new IllegalArgumentException("Cannot issue " + requestedQty + " items. Only " + currentMasterQty + " available in inventory.");
+        }
+
         if (scientistListId == null || scientistListId.trim().isEmpty()) {
             throw new IllegalArgumentException("Scientist contact ID is required.");
         }
@@ -96,7 +93,33 @@ public class OwnerIssueService {
             throw new SecurityException("Forbidden: Access denied to this scientist contact.");
         }
 
-        // 6. Save condition photo if uploaded
+        Instrument issuedInstrument;
+
+        if (requestedQty == currentMasterQty) {
+            masterInstrument.setStatus(Instrument.Status.ISSUED);
+            issuedInstrument = instrumentRepository.save(masterInstrument);
+        } else {
+            masterInstrument.setQuantity(currentMasterQty - requestedQty);
+            instrumentRepository.save(masterInstrument);
+
+            issuedInstrument = new Instrument();
+            issuedInstrument.setAssetId(masterInstrument.getAssetId() + "-" + System.currentTimeMillis() % 1000);
+            issuedInstrument.setName(masterInstrument.getName());
+            issuedInstrument.setMake(masterInstrument.getMake());
+            issuedInstrument.setSerialNo(masterInstrument.getSerialNo());
+            issuedInstrument.setQuantity(requestedQty);
+            issuedInstrument.setLocation(masterInstrument.getLocation());
+            issuedInstrument.setOwnerScientist(masterInstrument.getOwnerScientist());
+            issuedInstrument.setCalibrationValidTo(masterInstrument.getCalibrationValidTo());
+            issuedInstrument.setPurchaseDate(masterInstrument.getPurchaseDate());
+            issuedInstrument.setPurchaseCost(masterInstrument.getPurchaseCost());
+            issuedInstrument.setPhotoPath(masterInstrument.getPhotoPath());
+            issuedInstrument.setQrPhoto(masterInstrument.getQrPhoto());
+            issuedInstrument.setStatus(Instrument.Status.ISSUED);
+
+            issuedInstrument = instrumentRepository.save(issuedInstrument);
+        }
+
         String photoPath = null;
         if (photo != null && !photo.isEmpty()) {
             try {
@@ -106,11 +129,6 @@ public class OwnerIssueService {
             }
         }
 
-        // 7. Update Instrument Status to ISSUED
-        instrument.setStatus(Instrument.Status.ISSUED);
-        instrumentRepository.save(instrument);
-
-        // 8. Build Person Snapshot WITH Scientist Contact ID
         Person borrowerSnapshot = new Person();
         borrowerSnapshot.setId(targetScientist.getId());
         borrowerSnapshot.setName(targetScientist.getName());
@@ -119,11 +137,10 @@ public class OwnerIssueService {
         borrowerSnapshot.setDepartment(targetScientist.getDepartment());
         borrowerSnapshot.setIsActive(true);
 
-        // 9. Construct and Persist IssueRecord
         IssueRecord record = new IssueRecord();
-        record.setInstrument(instrument);
+        record.setInstrument(issuedInstrument);
         record.setOwnerScientist(authenticatedOwner);
-        record.setBorrowerScientist(borrowerSnapshot); // Embedded directly without @DBRef
+        record.setBorrowerScientist(borrowerSnapshot);
         record.setStaffName(staffName);
         record.setStaffEmail(staffEmail);
         record.setIssueDate(LocalDate.now());
@@ -135,7 +152,6 @@ public class OwnerIssueService {
 
         IssueRecord savedRecord = issueRecordRepository.save(record);
 
-        // 10. Trigger transactional emails
         try {
             mailSchedulerService.sendIssueConfirmation(savedRecord);
         } catch (Exception e) {

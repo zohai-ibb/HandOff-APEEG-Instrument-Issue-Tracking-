@@ -21,35 +21,36 @@ public class OwnerIssueController {
         this.ownerIssueService = ownerIssueService;
     }
 
-    @PostMapping(consumes = {"application/json"})
-    public ResponseEntity<?> issueToScientistJson(@RequestBody OwnerIssueRequestDTO dto) {
-        try {
-            IssueRecord createdRecord = ownerIssueService.issueToScientistFromList(
-                    dto.getInstrumentId(),
-                    dto.getScientistListId(),
-                    dto.getStaffName(),
-                    dto.getStaffEmail(),
-                    dto.getDueDate(),
-                    dto.getPurpose(),
-                    dto.getConditionOut(),
-                    null
-            );
-            return ResponseEntity.status(HttpStatus.CREATED).body(createdRecord);
+//    @PostMapping(consumes = {"application/json"})
+//    public ResponseEntity<?> issueToScientistJson(@RequestBody OwnerIssueRequestDTO dto) {
+//        try {
+//            IssueRecord createdRecord = ownerIssueService.issueToScientistFromList(
+//                    dto.getInstrumentId(),
+//                    dto.getScientistListId(),
+//                    dto.getStaffName(),
+//                    dto.getStaffEmail(),
+//                    dto.getDueDate(),
+//                    dto.getPurpose(),
+//                    dto.getConditionOut(),
+//                    null
+//            );
+//            return ResponseEntity.status(HttpStatus.CREATED).body(createdRecord);
+//
+//        } catch (IllegalArgumentException | IllegalStateException e) {
+//            return ResponseEntity.badRequest().body(e.getMessage());
+//        } catch (SecurityException e) {
+//            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+//        } catch (Exception e) {
+//            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+//                    .body("Failed to issue instrument: " + e.getMessage());
+//        }
+//    }
 
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Failed to issue instrument: " + e.getMessage());
-        }
-    }
-
-    @PostMapping(value = "/photo", consumes = {"multipart/form-data"})
+    @PostMapping(consumes = {"multipart/form-data"})
     public ResponseEntity<?> issueToScientistWithPhoto(
             @RequestParam("instrumentId") String instrumentId,
             @RequestParam("scientistListId") String scientistListId,
+            @RequestParam(value = "quantity", required = false, defaultValue = "1") Integer quantity,
             @RequestParam(value = "staffName", required = false) String staffName,
             @RequestParam(value = "staffEmail", required = false) String staffEmail,
             @RequestParam(value = "dueDate", required = false) String dueDate,
@@ -59,12 +60,13 @@ public class OwnerIssueController {
 
         try {
             LocalDate parsedDueDate = (dueDate != null && !dueDate.trim().isEmpty())
-                    ? LocalDate.parse(dueDate)
+                    ? LocalDate.parse(dueDate.trim())
                     : LocalDate.now().plusDays(14);
 
             IssueRecord createdRecord = ownerIssueService.issueToScientistFromList(
                     instrumentId,
                     scientistListId,
+                    quantity,
                     staffName,
                     staffEmail,
                     parsedDueDate,
