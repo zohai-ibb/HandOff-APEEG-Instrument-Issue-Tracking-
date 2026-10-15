@@ -3,8 +3,6 @@ package com.example.APEEG.service;
 import com.example.APEEG.model.Instrument;
 import com.example.APEEG.model.Person;
 import com.example.APEEG.repository.InstrumentRepository;
-import com.example.APEEG.service.FileStorageService;
-
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -50,10 +48,7 @@ public class InstrumentService {
         return instrumentRepository.findByStatus(status);
     }
 
-    /**
-     * SECURED: Returns ONLY instruments belonging to the currently authenticated scientist.
-     * Extracts identity from JWT Security Context.
-     */
+    // SECURED: Returns ONLY instruments belonging to the currently authenticated scientist.
     public List<Instrument> getMyInstruments() {
         Person authenticatedScientist = getAuthenticatedScientist();
         if (authenticatedScientist == null) {
@@ -62,10 +57,7 @@ public class InstrumentService {
         return instrumentRepository.findByOwnerScientistId(authenticatedScientist.getId());
     }
 
-    /**
-     * Creates a new instrument in the inventory.
-     * SECURED: Automatically sets the authenticated user as the ownerScientist.
-     */
+    // Creates a new instrument in the inventory.
     public Instrument createInstrument(Instrument instrument) {
         if (instrument.getAssetId() != null &&
                 instrumentRepository.findByAssetId(instrument.getAssetId()).isPresent()) {
@@ -73,13 +65,14 @@ public class InstrumentService {
         }
 
         Person authenticatedScientist = getAuthenticatedScientist();
-
         if (authenticatedScientist == null) {
             throw new SecurityException("Unauthorized: No authenticated scientist found in session context.");
         }
 
         instrument.setOwnerScientist(authenticatedScientist);
-
+        if (instrument.getQuantity() == null || instrument.getQuantity() < 1) {
+            instrument.setQuantity(1);
+        }
         if (instrument.getStatus() == null) {
             instrument.setStatus(Instrument.Status.AVAILABLE);
         }
@@ -92,7 +85,6 @@ public class InstrumentService {
                 .orElseThrow(() -> new IllegalArgumentException("Instrument not found with ID: " + id));
 
         Person loggedInScientist = getAuthenticatedScientist();
-
         if (loggedInScientist != null && existing.getOwnerScientist() != null) {
             if (!existing.getOwnerScientist().getId().equals(loggedInScientist.getId())) {
                 throw new SecurityException("Forbidden: You are not the owner of this instrument and cannot update it.");
@@ -102,14 +94,23 @@ public class InstrumentService {
         existing.setName(details.getName());
         existing.setMake(details.getMake());
         existing.setSerialNo(details.getSerialNo());
-        existing.setQuantity(details.getQuantity());
+        if (details.getQuantity() != null && details.getQuantity() > 0) {
+            existing.setQuantity(details.getQuantity());
+        }
         existing.setLocation(details.getLocation());
-        existing.setStatus(details.getStatus());
+        if (details.getStatus() != null) {
+            existing.setStatus(details.getStatus());
+        }
         existing.setCalibrationValidTo(details.getCalibrationValidTo());
         existing.setPurchaseDate(details.getPurchaseDate());
         existing.setPurchaseCost(details.getPurchaseCost());
         existing.setAccessories(details.getAccessories());
-        existing.setPhotoPath(details.getPhotoPath());
+        if (details.getPhotoPath() != null) {
+            existing.setPhotoPath(details.getPhotoPath());
+        }
+        if (details.getQrPhoto() != null) {
+            existing.setQrPhoto(details.getQrPhoto());
+        }
         existing.setManualPath(details.getManualPath());
 
         return instrumentRepository.save(existing);
@@ -120,7 +121,6 @@ public class InstrumentService {
                 .orElseThrow(() -> new IllegalArgumentException("Instrument not found with ID: " + id));
 
         Person loggedInScientist = getAuthenticatedScientist();
-
         if (loggedInScientist != null && existing.getOwnerScientist() != null) {
             if (!existing.getOwnerScientist().getId().equals(loggedInScientist.getId())) {
                 throw new SecurityException("Forbidden: You are not the owner of this instrument and cannot delete it.");
@@ -130,9 +130,7 @@ public class InstrumentService {
         instrumentRepository.deleteById(id);
     }
 
-    /**
-     * Creates an instrument record with photo, purchase date, and cost details.
-     */
+    // Creates an instrument record with photo, purchase date, cost, and quantity details.
     public Instrument createInstrumentWithPhoto(
             String assetId,
             String name,
@@ -176,7 +174,6 @@ public class InstrumentService {
             instrument.setPhotoPath(photoPath);
         }
 
-        // Save generated QR photo path
         if (qrPhoto != null && !qrPhoto.isEmpty()) {
             String qrPath = fileStorageService.saveFile(qrPhoto);
             instrument.setQrPhoto(qrPath);
@@ -185,9 +182,7 @@ public class InstrumentService {
         return instrumentRepository.save(instrument);
     }
 
-    /**
-     * Updates an existing instrument record with optional photo upload and quantity updates.
-     */
+    // Updates an existing instrument record with optional photo upload and quantity updates.
     public Instrument updateInstrumentWithPhoto(
             String id,
             String assetId,
@@ -200,7 +195,8 @@ public class InstrumentService {
             LocalDate calibrationValidTo,
             LocalDate purchaseDate,
             BigDecimal purchaseCost,
-            MultipartFile photo) throws IOException {
+            MultipartFile photo,
+            MultipartFile qrPhoto) throws IOException {
 
         Instrument existing = instrumentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Instrument not found with ID: " + id));
@@ -219,12 +215,10 @@ public class InstrumentService {
         if (quantity != null && quantity > 0) existing.setQuantity(quantity);
         if (location != null) existing.setLocation(location.trim());
 
-        // Update status if present
         if (statusStr != null && !statusStr.trim().isEmpty()) {
             try {
                 existing.setStatus(Instrument.Status.valueOf(statusStr.trim().toUpperCase()));
-            } catch (IllegalArgumentException e) {
-                // Ignore invalid status value
+            } catch (IllegalArgumentException ignored) {
             }
         }
 
@@ -237,10 +231,13 @@ public class InstrumentService {
             existing.setPhotoPath(newPhotoPath);
         }
 
+        if (qrPhoto != null && !qrPhoto.isEmpty()) {
+            String newQrPath = fileStorageService.saveFile(qrPhoto);
+            existing.setQrPhoto(newQrPath);
+        }
+
         return instrumentRepository.save(existing);
     }
-
-
 
     private Person getAuthenticatedScientist() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();

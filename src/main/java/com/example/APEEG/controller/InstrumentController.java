@@ -41,17 +41,13 @@ public class InstrumentController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    /**
-     * GET: Fetch all instruments
-     */
+    // GET: Fetch all instruments
     @GetMapping
     public List<Instrument> getAllInstruments() {
         return instrumentService.getAllInstruments();
     }
 
-    /**
-     * GET: Fetch instrument by Mongo Document ID
-     */
+    // GET: Fetch instrument by Mongo Document ID
     @GetMapping("/{id}")
     public ResponseEntity<Instrument> getInstrumentById(@PathVariable String id) {
         return instrumentService.getInstrumentById(id)
@@ -59,37 +55,19 @@ public class InstrumentController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    /**
-     * GET: Scan QR Code Endpoint
-     * Endpoint: GET /api/instruments/scan/{assetId}
-     */
-//    @GetMapping("/scan/{assetId}")
-//    public ResponseEntity<Instrument> getByAssetId(@PathVariable String assetId) {
-//        return instrumentService.getByAssetId(assetId)
-//                .map(ResponseEntity::ok)
-//                .orElse(ResponseEntity.notFound().build());
-//    }
-
-    /**
-     * GET: Fetch all instruments owned by a specific scientist
-     */
+    // GET: Fetch all instruments owned by a specific scientist
     @GetMapping("/owner/{ownerId}")
     public List<Instrument> getByOwner(@PathVariable String ownerId) {
         return instrumentService.getByOwnerScientistId(ownerId);
     }
 
-    /**
-     * GET: Filter instruments by Status enum
-     */
+    // GET: Filter instruments by Status enum
     @GetMapping("/status/{status}")
     public List<Instrument> getByStatus(@PathVariable Instrument.Status status) {
         return instrumentService.getByStatus(status);
     }
 
-    /**
-     * Standard JSON Create Endpoint (Without photo upload)
-     * Header: Content-Type: application/json
-     */
+    // Standard JSON Create Endpoint (Without photo upload)
     @PostMapping(consumes = {"application/json"})
     public ResponseEntity<?> createInstrumentJson(@RequestBody Instrument instrument) {
         try {
@@ -102,10 +80,7 @@ public class InstrumentController {
         }
     }
 
-    /**
-     * Multipart Form-Data Create Endpoint (With photo, QR photo, quantity, purchase date & cost)
-     * Header: Content-Type: multipart/form-data
-     */
+    // Multipart Form-Data Create Endpoint (With photo, QR photo, quantity, purchase date & cost)
     @PostMapping(consumes = {"multipart/form-data"})
     public ResponseEntity<?> createInstrumentWithPhoto(
             @RequestParam("asset_id") String assetId,
@@ -161,11 +136,7 @@ public class InstrumentController {
         }
     }
 
-    /**
-     * Multipart Form-Data Update Endpoint (Handles text, quantity, operational status & photo update)
-     * Route: PUT /api/instruments/{id}
-     * Header: Content-Type: multipart/form-data
-     */
+    // Multipart Form-Data Update Endpoint (Handles text, quantity, operational status & photo update)
     @PutMapping(value = "/{id}", consumes = {"multipart/form-data"})
     public ResponseEntity<?> updateInstrumentMultipart(
             @PathVariable String id,
@@ -183,7 +154,8 @@ public class InstrumentController {
             @RequestParam(value = "purchase_date", required = false) String purchaseDateSnake,
             @RequestParam(value = "purchaseDate", required = false) String purchaseDateCamel,
             @RequestParam(value = "purchase_cost", required = false) String purchaseCostStr,
-            @RequestPart(value = "photo", required = false) MultipartFile photo) {
+            @RequestPart(value = "photo", required = false) MultipartFile photo,
+            @RequestPart(value = "qrPhoto", required = false) MultipartFile qrPhoto) {
 
         try {
             String finalAssetId = (assetIdSnake != null && !assetIdSnake.isEmpty()) ? assetIdSnake : assetIdCamel;
@@ -215,7 +187,8 @@ public class InstrumentController {
                     parsedCalibDate,
                     parsedPurchaseDate,
                     parsedPurchaseCost,
-                    photo
+                    photo,
+                    qrPhoto
             );
 
             return ResponseEntity.ok(updated);
@@ -230,10 +203,7 @@ public class InstrumentController {
         }
     }
 
-    /**
-     * Fallback JSON Update Endpoint
-     * Header: Content-Type: application/json
-     */
+    // Fallback JSON Update Endpoint
     @PutMapping(value = "/{id}", consumes = {"application/json"})
     public ResponseEntity<?> updateInstrumentJson(
             @PathVariable String id,
@@ -248,9 +218,7 @@ public class InstrumentController {
         }
     }
 
-    /**
-     * DELETE: Remove instrument record by ID
-     */
+    // DELETE: Remove instrument record by ID
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteInstrument(@PathVariable String id) {
         try {
