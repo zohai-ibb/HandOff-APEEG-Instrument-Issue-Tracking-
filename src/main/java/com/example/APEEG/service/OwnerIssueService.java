@@ -58,6 +58,7 @@ public class OwnerIssueService {
             throw new SecurityException("Unauthorized: Valid scientist authentication required.");
         }
 
+
         // 1.5. Automatically save/update the staff member details under the authenticated scientist
         if (staffName != null && !staffName.trim().isEmpty() && staffEmail != null && !staffEmail.trim().isEmpty()) {
             staffMemberService.saveOrGetStaffMember(staffName, staffEmail, null, authenticatedOwner.getDepartment());
