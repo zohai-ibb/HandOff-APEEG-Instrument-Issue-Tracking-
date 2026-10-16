@@ -1,13 +1,17 @@
 package com.example.APEEG.controller;
 
 import com.example.APEEG.model.Person;
+import com.example.APEEG.service.ExcelExportService;
 import com.example.APEEG.service.PersonService;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -19,9 +23,11 @@ import java.util.List;
 public class PersonController {
 
     private final PersonService personService;
+    private final ExcelExportService excelExportService;
 
-    public PersonController(PersonService personService) {
+    public PersonController(PersonService personService, ExcelExportService excelExportService) {
         this.personService = personService;
+        this.excelExportService = excelExportService;
     }
 
     @GetMapping
@@ -109,6 +115,30 @@ public class PersonController {
             return ResponseEntity.noContent().build();
         }
         return ResponseEntity.notFound().build();
+    }
+
+    // Endpoint 1: Download Instruments Excel
+    @GetMapping("/{id}/export-instruments")
+    public ResponseEntity<byte[]> exportScientistInstruments(@PathVariable String id) {
+        byte[] excelData = excelExportService.generateInstrumentsExcelReport(id);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentDispositionFormData("attachment", "Instruments_Report_" + LocalDate.now() + ".xlsx");
+
+        return new ResponseEntity<>(excelData, headers, HttpStatus.OK);
+    }
+
+    // Endpoint 2: Download Issue Records Excel
+    @GetMapping("/{id}/export-issue-records")
+    public ResponseEntity<byte[]> exportScientistIssueRecords(@PathVariable String id) {
+        byte[] excelData = excelExportService.generateIssueRecordsExcelReport(id);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentDispositionFormData("attachment", "Issue_Records_Report_" + LocalDate.now() + ".xlsx");
+
+        return new ResponseEntity<>(excelData, headers, HttpStatus.OK);
     }
 
     private Person getAuthenticatedScientist() {
