@@ -33,10 +33,24 @@ public class InstrumentController {
         }
     }
 
-    // GET: /api/instruments/scan/{assetId} - PathVariable QR code scanner
-    @GetMapping("/scan/{assetId}")
-    public ResponseEntity<Instrument> getByAssetId(@PathVariable String assetId) {
+    /**
+     * GET: Scan QR Code Endpoint via Query Parameter
+     * Supports asset IDs with slashes (e.g. GET /api/instruments/scan?assetId=CBRI/APEEG/0135)
+     */
+    @GetMapping("/scan")
+    public ResponseEntity<Instrument> scanByAssetIdQuery(@RequestParam("assetId") String assetId) {
         return instrumentService.getByAssetId(assetId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Fallback for legacy path variable requests
+     */
+    @GetMapping("/scan/{*assetId}")
+    public ResponseEntity<Instrument> scanByAssetIdPath(@PathVariable String assetId) {
+        String cleanAssetId = assetId.startsWith("/") ? assetId.substring(1) : assetId;
+        return instrumentService.getByAssetId(cleanAssetId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
