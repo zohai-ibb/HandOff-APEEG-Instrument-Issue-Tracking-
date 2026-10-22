@@ -3,7 +3,6 @@ package com.example.APEEG.config;
 import com.example.APEEG.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -30,20 +29,13 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // 1. Explicitly enable Spring Security CORS handling
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                // 2. Disable CSRF for stateless REST APIs
                 .csrf(AbstractHttpConfigurer::disable)
-                // 3. Configure stateless session management
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // 4. Configure Endpoint Access Rules
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/auth/**", "/api/persons/login").permitAll()
-                        .requestMatchers("/uploads/**").permitAll()// Public auth routes
-                        .anyRequest().authenticated()                                     // Protected domain routes
+                        .requestMatchers("/api/auth/**", "/uploads/**").permitAll()
+                        .anyRequest().authenticated()
                 )
-                // 5. Attach JWT Filter
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -53,11 +45,17 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // Include Vite (5173), Create React App (3000), and Production domain
+        // Whitelist Capacitor mobile origins alongside Web dev servers
         configuration.setAllowedOrigins(List.of(
-                "http://localhost:5173",
-                "http://localhost:3000",
-                "https://apeeg-cbri.res.in"
+                "http://localhost",           // Capacitor Android Scheme
+                "https://localhost",          // Capacitor SSL Default
+                "capacitor://localhost",      // Capacitor Native Scheme
+                "http://localhost:5173",      // Vite React Dev
+                "http://localhost:3000",      // CRA / Alternative Dev
+                "https://apeeg-cbri.res.in",   // Production Web URL
+                "http://192.168.1.34:8080",
+                "http://192.168.1.34"
+
         ));
 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
