@@ -52,7 +52,6 @@ public class SecurityConfig {
                 "capacitor://localhost",      // Capacitor Native Scheme
                 "http://localhost:5173",      // Vite local dev
                 "http://localhost:3000",      // React local dev
-                "https://csir-yantra-dristi-instrument.onrender.com",
                 "https://csir-yantra-dhristi-instrument.onrender.com"/// Render Live Backend
         ));
 
