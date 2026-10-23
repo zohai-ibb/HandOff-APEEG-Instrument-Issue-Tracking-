@@ -47,14 +47,12 @@ public class SecurityConfig {
 
         // Whitelist Capacitor mobile origins alongside Web dev servers
         configuration.setAllowedOrigins(List.of(
-                "http://localhost",           // Capacitor Android Scheme
-                "https://localhost",          // Capacitor SSL Default
-                "capacitor://localhost",      // Capacitor Native Scheme
-                "http://localhost:5173",      // Vite React Dev
-                "http://localhost:3000",      // CRA / Alternative Dev
-                "https://apeeg-cbri.res.in",   // Production Web URL
-                "http://192.168.1.34:8080",
-                "http://192.168.1.34"
+                "http://localhost",           // Capacitor Android default
+                "https://localhost",          // Capacitor SSL
+                "capacitor://localhost",      // Capacitor iOS/Android fallback
+                "http://localhost:5173",      // Vite local web
+                "http://192.168.31.126:8080",  // Host PC IP
+                "http://192.168.31.126"
 
         ));
 
