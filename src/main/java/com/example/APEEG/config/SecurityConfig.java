@@ -33,7 +33,8 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/uploads/**").permitAll()
+                        .requestMatchers("/api/auth/**", "/api/persons/login").permitAll() // PUBLIC LOGIN
+                        .requestMatchers("/uploads/**").permitAll()                         // PUBLIC MEDIA
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -45,14 +46,13 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // Whitelist Capacitor mobile origins alongside Web dev servers
         configuration.setAllowedOrigins(List.of(
-                "https://localhost",          // Capacitor Android HTTPS Scheme
-                "http://localhost",           // Capacitor Android HTTP Scheme
-                "capacitor://localhost",      // Capacitor Native Scheme
-                "http://localhost:5173",      // Vite local dev
-                "http://localhost:3000",      // React local dev
-                "https://csir-yantra-dhristi-instrument.onrender.com"/// Render Live Backend
+                "https://localhost",
+                "http://localhost",
+                "capacitor://localhost",
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "https://csir-yantra-dhristi-instrument.onrender.com" // Live Render Domain
         ));
 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
