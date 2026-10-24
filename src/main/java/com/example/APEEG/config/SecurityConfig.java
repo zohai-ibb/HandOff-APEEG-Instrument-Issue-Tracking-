@@ -71,8 +71,7 @@ public class SecurityConfig {
                 "capacitor://localhost",                               // Capacitor Native Scheme
                 "http://localhost:5173",                               // Vite Local Dev
                 "http://localhost:3000",                               // React Local Dev
-                "https://csir-yantra-dhristi-instrument.onrender.com", // Live Render Domain (with h)
-                "https://csir-yantra-dristi-instrument.onrender.com"   // Live Render Domain (without h)
+                "https://csir-yantra-dhristi.onrender.com"             // Live Render Domain (without h)
         ));
 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
