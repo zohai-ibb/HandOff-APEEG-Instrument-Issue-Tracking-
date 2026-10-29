@@ -50,6 +50,9 @@ public class SecurityConfig {
                         // Permit public access to static file uploads (images)
                         .requestMatchers("/uploads/**").permitAll()
 
+                        // Permit AWS health check
+                        .requestMatchers("/health").permitAll()
+
                         // All other operational domain endpoints require a valid JWT
                         .anyRequest().authenticated()
                 )
